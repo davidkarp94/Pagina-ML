@@ -21,6 +21,7 @@ app.get("/api/products", async (req, res) => {
     }
 });
 
+const PORT = 5000;
 app.listen(PORT, () => {
-    console.log(`Servidor corriendo en 5000`);
+    console.log(`Servidor corriendo en el puerto ${PORT}`);
 })
