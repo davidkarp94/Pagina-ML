@@ -1,0 +1,16 @@
+.routebutton-btn {
+    padding: .5rem 1rem;
+    border: none;
+    background-color: black;
+    color: white;
+
+    font-weight: bold;
+    font-size: 1rem;
+
+    transition: .3s all ease-in-out;
+    cursor: pointer;
+}
+
+.routebutton-btn:hover {
+    background-color: red;
+}

@@ -6,7 +6,9 @@ const RouteButton = ({ text, route }) => {
   return (
     <div className='routebutton-container'>
         <Link to={ route }>
+          <button className='routebutton-btn'>
             { text }
+          </button>
         </Link>
     </div>
   )

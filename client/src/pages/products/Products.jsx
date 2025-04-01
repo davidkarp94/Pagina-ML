@@ -1,22 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import RouteButton from '../../components/routebutton/RouteButton';
 import './products.css';
 
 const data = [
-  { id: 1, name: "Producto A", price: 5000, category: "Electrónica" },
-  { id: 2, name: "Producto B", price: 3000, category: "Hogar" },
-  { id: 3, name: "Producto C", price: 8000, category: "Electrónica" },
-  { id: 4, name: "Producto D", price: 2000, category: "Juguetes" },
-  { id: 5, name: "Producto E", price: 6000, category: "Hogar" },
-  { id: 6, name: "Producto F", price: 7000, category: "Electrónica" },
-  { id: 7, name: "Producto G", price: 4500, category: "Juguetes" },
-  { id: 8, name: "Producto H", price: 2500, category: "Hogar" },
-  { id: 9, name: "Producto I", price: 1000, category: "Juguetes" },
-  { id: 10, name: "Producto J", price: 9000, category: "Electrónica" },
-  { id: 11, name: "Producto K", price: 8500, category: "Hogar" },
-  { id: 12, name: "Producto L", price: 1200, category: "Juguetes" },
-  { id: 13, name: "Producto M", price: 5300, category: "Electrónica" },
-  { id: 14, name: "Producto N", price: 4700, category: "Hogar" },
-  { id: 15, name: "Producto O", price: 3200, category: "Juguetes" },
+  { id: 1, name: "Producto A", price: 5000, category: "Electrónica", description: "Descripción del Producto A" },
+  { id: 2, name: "Producto B", price: 3000, category: "Hogar", description: "Descripción del Producto B" },
+  { id: 3, name: "Producto C", price: 8000, category: "Electrónica", description: "Descripción del Producto C" },
+  { id: 4, name: "Producto D", price: 2000, category: "Juguetes", description: "Descripción del Producto D" },
+  { id: 5, name: "Producto E", price: 6000, category: "Hogar", description: "Descripción del Producto E" },
+  { id: 6, name: "Producto F", price: 7000, category: "Electrónica", description: "Descripción del Producto F" },
+  { id: 7, name: "Producto G", price: 4500, category: "Juguetes", description: "Descripción del Producto G" },
+  { id: 8, name: "Producto H", price: 2500, category: "Hogar", description: "Descripción del Producto H" },
+  { id: 9, name: "Producto I", price: 1000, category: "Juguetes", description: "Descripción del Producto I" },
+  { id: 10, name: "Producto J", price: 9000, category: "Electrónica", description: "Descripción del Producto J" },
+  { id: 11, name: "Producto K", price: 8500, category: "Hogar", description: "Descripción del Producto K" },
+  { id: 12, name: "Producto L", price: 1200, category: "Juguetes", description: "Descripción del Producto L" },
+  { id: 13, name: "Producto M", price: 5300, category: "Electrónica", description: "Descripción del Producto M" },
+  { id: 14, name: "Producto N", price: 4700, category: "Hogar", description: "Descripción del Producto N" },
+  { id: 15, name: "Producto O", price: 3200, category: "Juguetes", description: "Descripción del Producto O" },
 ];
 
 const categories = ["Todas", "Electrónica", "Hogar", "Juguetes"];
@@ -30,6 +32,7 @@ const Products = () => {
   const [isCatOpen, setIsCatOpen] = useState(false);
   const [isPriceOpen, setIsPriceOpen] = useState(false);
 
+  const navigate = useNavigate();
   const catRef = useRef(null);
   const priceRef = useRef(null);
 
@@ -78,41 +81,47 @@ const Products = () => {
         }}
         />
 
-        <div className={`select-container ${isCatOpen ? "cat-open" : ""}`} ref={catRef}>
-          <select 
-          value={category} 
-          onClick={() => setIsCatOpen((prev) => !prev)}
-          onBlur={() => setTimeout(() => setIsCatOpen(false), 200)}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setCurrentPage(1);
-            setTimeout(() => setIsCatOpen(false), 100);
-          }}>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-        </div>
-        
-        <div className={`select-container ${isPriceOpen ? "price-open" : ""}`} ref={priceRef}>
-          <select 
-          value={sortOrder}
-          onClick={() => setIsPriceOpen((prev) => !prev)}
-          onBlur={() => setTimeout(() => setIsPriceOpen(false), 200)}
-          onChange={(e) => {
-            setSortOrder(e.target.value);
-            setCurrentPage(1);
-            setTimeout(() => setIsPriceOpen(false), 100);
-          }}>
-            <option value="asc">Precio: Menor a Mayor</option>
-            <option value="desc">Precio: Mayor a Menor</option>
-          </select>
+        <div className="filters-selects">
+          <div className={`select-container ${isCatOpen ? "cat-open" : ""}`} ref={catRef}>
+            <select 
+            value={category} 
+            onClick={() => setIsCatOpen((prev) => !prev)}
+            onBlur={() => setTimeout(() => setIsCatOpen(false), 200)}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setCurrentPage(1);
+              setTimeout(() => setIsCatOpen(false), 100);
+            }}>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className={`select-container ${isPriceOpen ? "price-open" : ""}`} ref={priceRef}>
+            <select 
+            value={sortOrder}
+            onClick={() => setIsPriceOpen((prev) => !prev)}
+            onBlur={() => setTimeout(() => setIsPriceOpen(false), 200)}
+            onChange={(e) => {
+              setSortOrder(e.target.value);
+              setCurrentPage(1);
+              setTimeout(() => setIsPriceOpen(false), 100);
+            }}>
+              <option value="asc">Precio: Menor a Mayor</option>
+              <option value="desc">Precio: Mayor a Menor</option>
+            </select>
+          </div>
+
         </div>
       </div>
 
       <div className="product-list">
         {currentProducts.map((product) => (
-          <div key={product.id} className="product-card">
+          <div 
+          key={product.id} 
+          className="product-card"
+          >
             <p className="product-name">{product.name}</p>
             <img 
             src="https://i0.wp.com/ricedh.org/wp-content/uploads/2020/11/qi-bin-w4hbafegiac-unsplash.jpg?fit=1600%2C1066&ssl=1" 
@@ -121,6 +130,7 @@ const Products = () => {
             />
             <p className="product-price">${product.price}</p>
             <p className="product-category">Categoría: {product.category}</p>
+            <RouteButton text="Ver Producto" route={`/products/${product.id}`} />
           </div>
         ))};
       </div>
