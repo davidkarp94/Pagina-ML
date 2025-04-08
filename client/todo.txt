@@ -1,1 +1,14 @@
-inicio --- productos --- quienes somos --- contacto
+props:
+
+body
+    .id
+    .title
+    .category_id
+    .price
+    .available_quantity
+    .sold_quantity
+    .condition
+    .pictures[]
+        .url
+    .descriptions
+    

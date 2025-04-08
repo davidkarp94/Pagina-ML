@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ACCESS_TOKEN = 'APP_USR-1844316705046675-040711-0061f77f34a56dc874b7bc167ecdc44c-86060871';
+const ACCESS_TOKEN = 'APP_USR-1844316705046675-040815-e3aba7302fa380a04d3f04893bac36b0-86060871';
 const USER_ID = '86060871';
 
 app.get("/api/ml/items-ids", async (req, res) => {
@@ -45,6 +45,42 @@ app.get("/api/ml/items-ids", async (req, res) => {
     } catch (error) {
         console.error("Error al obtener los Ids: ", error.message);
         res.status(500).json({ error: "Errir al obtener los item Ids" });
+    }
+});
+
+app.post("/api/ml/items-details", async (req, res) => {
+    const itemIds = req.body.itemIds;
+    if (!itemIds || !Array.isArray(itemIds)) {
+        return res.status(400).json({ error: "Se requiere un array de itemIds" });
+    }
+
+    const chunkSize = 20;
+    const allItemDetails = [];
+
+    try {
+        for (let i = 0; i < itemIds.length; i += chunkSize) {
+            const chunk = itemIds.slice(i, i + chunkSize);
+            const idsParam = chunk.join(',');
+
+            const { data } = await axios.get(`https://api.mercadolibre.com/items?ids=${idsParam}`, {
+                headers: {
+                    Authorization: `Bearer ${ACCESS_TOKEN}`
+                }
+            });
+
+            const validItems = data
+                .filter(item => item.code === 200)
+                .map(item => item.body);
+
+                allItemDetails.push(...validItems);
+
+                console.log(`Procesando chunk ${i / chunkSize + 1}: ${chunk.length} items`);
+        }
+
+        res.json({ total: allItemDetails.length, items: allItemDetails });
+    } catch (error) {
+        console.error("Error al obtener los detalles de los items.", error.message);
+        res.status(500).json({ error: "Error al obtener los detalles de los items" });
     }
 });
 
