@@ -96,12 +96,12 @@ app.get("/api/ml/items-details", async (req, res) => {
                 .map(item => ({
                     id: item.body.id,
                     title: item.body.title,
-                    category_id: item.body.categoy_id,
+                    category_id: item.body.category_id,
                     price: item.body.price,
-                    available_quantity: item.available_quantity,
+                    available_quantity: item.body.available_quantity,
                     condition: item.body.condition,
                     pictures: item.body.pictures.map(pic => pic.url),
-                    descriptions: item.body.descriptions
+                    descriptions: item.body.descriptions[0]
                 }));
 
                 detailedItems.push(...batchItems);
