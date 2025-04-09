@@ -2,13 +2,14 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
+const fs = require("fs").promises;
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-const ACCESS_TOKEN = 'APP_USR-1844316705046675-040815-e3aba7302fa380a04d3f04893bac36b0-86060871';
+const ACCESS_TOKEN = 'APP_USR-1844316705046675-040913-8f05e0ea4c8cf14d15cb03f18eb49609-86060871';
 const USER_ID = '86060871';
 
 app.get("/api/ml/items-ids", async (req, res) => {
@@ -48,38 +49,75 @@ app.get("/api/ml/items-ids", async (req, res) => {
     }
 });
 
-app.post("/api/ml/items-details", async (req, res) => {
-    const itemIds = req.body.itemIds;
-    if (!itemIds || !Array.isArray(itemIds)) {
-        return res.status(400).json({ error: "Se requiere un array de itemIds" });
-    }
-
-    const chunkSize = 20;
-    const allItemDetails = [];
-
+app.get("/api/ml/items-details", async (req, res) => {
     try {
-        for (let i = 0; i < itemIds.length; i += chunkSize) {
-            const chunk = itemIds.slice(i, i + chunkSize);
-            const idsParam = chunk.join(',');
+        const allItemIds = [];
+        let scrollId = null;
+        let keepScrolling = true;
 
-            const { data } = await axios.get(`https://api.mercadolibre.com/items?ids=${idsParam}`, {
+        while (keepScrolling) {
+            let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
+            if (scrollId) {
+                url += `&scroll_id=${encodeURIComponent(scrollId)}`;
+            }
+
+            const { data } = await axios.get(url, {
                 headers: {
                     Authorization: `Bearer ${ACCESS_TOKEN}`
                 }
             });
 
-            const validItems = data
-                .filter(item => item.code === 200)
-                .map(item => item.body);
+            const itemIds = data.results || [];
+            allItemIds.push(...itemIds);
 
-                allItemDetails.push(...validItems);
-
-                console.log(`Procesando chunk ${i / chunkSize + 1}: ${chunk.length} items`);
+            if (itemIds.length === 0 || !data.scroll_id) {
+                keepScrolling = false;
+            } else {
+                scrollId = data.scroll_id;
+            }
         }
 
-        res.json({ total: allItemDetails.length, items: allItemDetails });
+        const detailedItems = [];
+        for (let i = 0; i < allItemIds.length; i += 20) {
+            const batchIds = allItemIds.slice(i, i + 20);
+            const idsString = batchIds.join(',');
+
+            const response = await axios.get(
+                `https://api.mercadolibre.com/items?ids=${idsString}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${ACCESS_TOKEN}`
+                    }
+                }
+            );
+
+            const batchItems = response.data
+                .filter(item => item.body.available_quantity > 0)
+                .map(item => ({
+                    id: item.body.id,
+                    title: item.body.title,
+                    category_id: item.body.categoy_id,
+                    price: item.body.price,
+                    available_quantity: item.available_quantity,
+                    condition: item.body.condition,
+                    pictures: item.body.pictures.map(pic => pic.url),
+                    descriptions: item.body.descriptions
+                }));
+
+                detailedItems.push(...batchItems);
+                console.log(`Procesados ${detailedItems.length} items de ${allItemIds.length}`);
+        }
+
+        const outputString = JSON.stringify(detailedItems, null, 2);
+        await fs.writeFile('items-details.txt', outputString);
+
+        res.json({
+            success: true,
+            total: detailedItems.length,
+            items: detailedItems
+        });
     } catch (error) {
-        console.error("Error al obtener los detalles de los items.", error.message);
+        console.error("Error al obtener los detalles: ", error.message);
         res.status(500).json({ error: "Error al obtener los detalles de los items" });
     }
 });
