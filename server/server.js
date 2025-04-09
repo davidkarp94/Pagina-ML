@@ -12,43 +12,6 @@ app.use(express.json());
 const ACCESS_TOKEN = 'APP_USR-1844316705046675-040913-8f05e0ea4c8cf14d15cb03f18eb49609-86060871';
 const USER_ID = '86060871';
 
-app.get("/api/ml/items-ids", async (req, res) => {
-    const allItemIds = [];
-    let scrollId = null;
-    let keepScrolling = true;
-
-    try {
-        while (keepScrolling) {
-            let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
-            if (scrollId) {
-                url += `&scroll_id=${encodeURIComponent(scrollId)}`;
-            }
-
-            const { data } = await axios.get(url, {
-                headers: {
-                    Authorization: `Bearer ${ACCESS_TOKEN}`
-                }
-            });
-
-            const itemIds = data.results || [];
-            allItemIds.push(...itemIds);
-
-            if (itemIds.length === 0 || !data.scroll_id) {
-                keepScrolling = false;
-            } else {
-                scrollId = data.scroll_id;
-            }
-
-            console.log(`Recuperados ${allItemIds.length} IDs hasta ahora...`);
-        }
-
-        res.json({ total: allItemIds.length, items: allItemIds });
-    } catch (error) {
-        console.error("Error al obtener los Ids: ", error.message);
-        res.status(500).json({ error: "Errir al obtener los item Ids" });
-    }
-});
-
 app.get("/api/ml/items-details", async (req, res) => {
     try {
         const allItemIds = [];
@@ -101,11 +64,11 @@ app.get("/api/ml/items-details", async (req, res) => {
                     available_quantity: item.body.available_quantity,
                     condition: item.body.condition,
                     pictures: item.body.pictures.map(pic => pic.url),
-                    descriptions: item.body.descriptions[0]
+                    descriptions: item.body.descriptions
                 }));
 
                 detailedItems.push(...batchItems);
-                console.log(`Procesados ${detailedItems.length} items de ${allItemIds.length}`);
+                console.log(`${detailedItems.length} items de ${allItemIds.length}`);
         }
 
         const outputString = JSON.stringify(detailedItems, null, 2);
@@ -115,6 +78,35 @@ app.get("/api/ml/items-details", async (req, res) => {
             success: true,
             total: detailedItems.length,
             items: detailedItems
+        });
+    } catch (error) {
+        console.error("Error al obtener los detalles: ", error.message);
+        res.status(500).json({ error: "Error al obtener los detalles de los items" });
+    }
+});
+
+app.get("/api/ml/item", async (req, res) => {
+    try {
+            const detailedItems = [];
+            const response = await axios.get(
+                `https://api.mercadolibre.com/items?ids=MLA868924988`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${ACCESS_TOKEN}`
+                    }
+                }
+            );
+
+            const batchItems = response.data
+                .map(item => ({
+                    descripciones: item.body.descriptions
+                }));
+
+                detailedItems.push(...batchItems);
+                console.log(`${detailedItems.length} items de `);
+
+        res.json({
+            detailedItems
         });
     } catch (error) {
         console.error("Error al obtener los detalles: ", error.message);
