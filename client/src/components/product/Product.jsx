@@ -1,53 +1,104 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './product.css';
 import { useCart } from '../../context/CartContext';
 
-const data = [
-  { id: 1, name: "Producto A", price: 5000, category: "Electrónica", description: "Descripción del Producto A" },
-  { id: 2, name: "Producto B", price: 3000, category: "Hogar", description: "Descripción del Producto B" },
-  { id: 3, name: "Producto C", price: 8000, category: "Electrónica", description: "Descripción del Producto C" },
-  { id: 4, name: "Producto D", price: 2000, category: "Juguetes", description: "Descripción del Producto D" },
-  { id: 5, name: "Producto E", price: 6000, category: "Hogar", description: "Descripción del Producto E" },
-  { id: 6, name: "Producto F", price: 7000, category: "Electrónica", description: "Descripción del Producto F" },
-  { id: 7, name: "Producto G", price: 4500, category: "Juguetes", description: "Descripción del Producto G" },
-  { id: 8, name: "Producto H", price: 2500, category: "Hogar", description: "Descripción del Producto H" },
-  { id: 9, name: "Producto I", price: 1000, category: "Juguetes", description: "Descripción del Producto I" },
-  { id: 10, name: "Producto J", price: 9000, category: "Electrónica", description: "Descripción del Producto J" },
-  { id: 11, name: "Producto K", price: 8500, category: "Hogar", description: "Descripción del Producto K" },
-  { id: 12, name: "Producto L", price: 1200, category: "Juguetes", description: "Descripción del Producto L" },
-  { id: 13, name: "Producto M", price: 5300, category: "Electrónica", description: "Descripción del Producto M" },
-  { id: 14, name: "Producto N", price: 4700, category: "Hogar", description: "Descripción del Producto N" },
-  { id: 15, name: "Producto O", price: 3200, category: "Juguetes", description: "Descripción del Producto O" },
-];
-
 const Product = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  const product = data.find((p) => p.id === parseInt(id));
-
   const { addToCart } = useCart();
+  const [ product, setProduct ] = useState(null);
+  const [ isLoading, setIsLoading ] = useState(true);
+  const [ currentImageIndex, setCurrentImageIndex ] = useState(0);
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const response = await fetch('/items-details.txt');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const text = await response.text();
+        const data = JSON.parse(text);
+        const foundProduct = data.find((p) => p.id === id);
+        setProduct(foundProduct);
+      } catch (error) {
+        console.error('Error fetching product: ', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [id]);
 
   const handleAddToCart = () => {
-    addToCart(product);
+    if (product) {
+      addToCart(product);
+    }
+  };
+
+  const handlePrevImage = () => {
+    setCurrentImageIndex((prev) => (prev === 0 ? (product.pictures.length - 1) : prev - 1));
+  };
+
+  const handleNextImage = () => {
+    setCurrentImageIndex((prev) => (prev === product.pictures.length - 1 ? 0 : prev + 1));
+  }
+
+  if (isLoading) {
+    return <div className='product-container'>Cargando producto...</div>
   }
 
   if (!product) {
-    return <div>Producto no encontrado</div>
+    return <div className='product-container'>Producto no encontrado.</div>
   }
+
+  const images = product.pictures.length > 0
+    ? product.pictures
+    : ["https://i0.wp.com/ricedh.org/wp-content/uploads/2020/11/qi-bin-w4hbafegiac-unsplash.jpg?fit=1600%2C1066&ssl=1"];
 
   return (
     <div className='product-container'>
-      <p className="product-title">{product.name}</p>
-      <img 
-        src="https://i0.wp.com/ricedh.org/wp-content/uploads/2020/11/qi-bin-w4hbafegiac-unsplash.jpg?fit=1600%2C1066&ssl=1" 
-        alt={`Imagen de ${product.name}`} 
+      <p className="product-title">{product.title}</p>
+
+      <div className="carousel">
+        <button
+        className='carousel-button prev'
+        onClick={handlePrevImage}
+        disabled={images.length <= 1}
+        >
+          &#9664;
+        </button>
+
+        <img
+        src={images[currentImageIndex]}
+        alt={`Imagen ${currentImageIndex + 1} de ${product.title}`}
         className="product-img"
-      />
+        />
+
+        <button
+        className='carousel-button next'
+        onClick={handleNextImage}
+        disabled={images.length <= 1}
+        >
+          &#9654;
+        </button>
+      </div>
+
+      <div className="carousel-indicators">
+        {images.map((_, index) => (
+          <span
+          key={index}
+          className={`indicator ${index === currentImageIndex ? 'active' : ''}`}
+          onClick={() => setCurrentImageIndex(index)}
+          />
+        ))}
+      </div>
+
       <p><strong>Precio:</strong> ${product.price}</p>
-      <p><strong>Categoría:</strong> {product.category}</p>
-      <p><strong>Descripción:</strong> {product.description}</p>
+      <p><strong>Condición:</strong> {product.condition === "new" ? "Nuevo" : "Usado"}</p>
+      <p><strong>Stock:</strong> {product.available_quantity} {product.available_quantity === 1 ? "Unidad" : "Unidades"}</p>
       <button
       className="buy-button"
       onClick={handleAddToCart}

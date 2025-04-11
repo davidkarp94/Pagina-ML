@@ -1,46 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import RouteButton from '../../components/routebutton/RouteButton';
 import './products.css';
 
-const data = [
-  { id: 1, name: "Producto A", price: 5000, category: "Electrónica", description: "Descripción del Producto A" },
-  { id: 2, name: "Producto B", price: 3000, category: "Hogar", description: "Descripción del Producto B" },
-  { id: 3, name: "Producto C", price: 8000, category: "Electrónica", description: "Descripción del Producto C" },
-  { id: 4, name: "Producto D", price: 2000, category: "Juguetes", description: "Descripción del Producto D" },
-  { id: 5, name: "Producto E", price: 6000, category: "Hogar", description: "Descripción del Producto E" },
-  { id: 6, name: "Producto F", price: 7000, category: "Electrónica", description: "Descripción del Producto F" },
-  { id: 7, name: "Producto G", price: 4500, category: "Juguetes", description: "Descripción del Producto G" },
-  { id: 8, name: "Producto H", price: 2500, category: "Hogar", description: "Descripción del Producto H" },
-  { id: 9, name: "Producto I", price: 1000, category: "Juguetes", description: "Descripción del Producto I" },
-  { id: 10, name: "Producto J", price: 9000, category: "Electrónica", description: "Descripción del Producto J" },
-  { id: 11, name: "Producto K", price: 8500, category: "Hogar", description: "Descripción del Producto K" },
-  { id: 12, name: "Producto L", price: 1200, category: "Juguetes", description: "Descripción del Producto L" },
-  { id: 13, name: "Producto M", price: 5300, category: "Electrónica", description: "Descripción del Producto M" },
-  { id: 14, name: "Producto N", price: 4700, category: "Hogar", description: "Descripción del Producto N" },
-  { id: 15, name: "Producto O", price: 3200, category: "Juguetes", description: "Descripción del Producto O" },
-];
-
-const categories = ["Todas", "Electrónica", "Hogar", "Juguetes"];
-
 const Products = () => {
 
+  const [products, setProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("Todas");
   const [sortOrder, setSortOrder] = useState("asc");
   const [currentPage, setCurrentPage] = useState(1);
-  const [isCatOpen, setIsCatOpen] = useState(false);
   const [isPriceOpen, setIsPriceOpen] = useState(false);
 
   const navigate = useNavigate();
-  const catRef = useRef(null);
   const priceRef = useRef(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if(catRef.current && !catRef.current.contains(event.target)) {
-        setIsCatOpen(false);
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch('/items-details.txt');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const text = await response.text();
+        const data = JSON.parse(text);
+        setProducts(data);
+      } catch (error) {
+        console.error('Error fetching products: ', error);
+      } finally {
+        setIsLoading(false);
       }
+    };
+
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
       if(priceRef.current && !priceRef.current.contains(event.target)) {
         setIsPriceOpen(false)
       }
@@ -53,20 +49,65 @@ const Products = () => {
     };
   }, []);
 
-  const productsPerPage = 12;
+  const productsPerPage = 20;
+  const maxVisiblePages = 8;
 
-  const filteredData = data
-    .filter((product) =>
-      product.name.toLowerCase().includes(search.toLowerCase()) &&
-      (category === "Todas" || product.category === category)
-    )
+  const filteredData = products
+    .filter((product) =>{
+      const title = product.title.toLowerCase();
+      const searchTerms = search.toLowerCase().trim().split(/\s+/);
+      return searchTerms.every(term => title.includes(term));
+    })
     .sort((a, b) => (sortOrder === "asc" ? a.price - b.price : b.price - a.price));
 
     const totalPages = Math.ceil(filteredData.length / productsPerPage);
-
     const indexOfLastProduct = currentPage * productsPerPage;
     const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
     const currentProducts = filteredData.slice(indexOfFirstProduct, indexOfLastProduct);
+
+    const getPageNumbers = () => {
+      const pageNumbers = [];
+      let startPage, endPage;
+
+      if (totalPages <= maxVisiblePages) {
+        startPage = 1;
+        endPage = totalPages;
+      } else {
+        const maxPagesBeforeCurrent = Math.floor(maxVisiblePages / 2);
+        const maxPagesAfterCurrent = Math.ceil(maxVisiblePages / 2) -1;
+
+        startPage = Math.max(currentPage - maxPagesBeforeCurrent, 1);
+        endPage = Math.min(currentPage + maxPagesAfterCurrent, totalPages);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+          if (startPage === 1) {
+            endPage = Math.min(maxVisiblePages, totalPages);
+          } else if (endPage === totalPages) {
+            startPage = Math.max(totalPages - maxVisiblePages + 1, 1);
+          }
+        }
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pageNumbers.push(i);
+      }
+
+      return {
+        pageNumbers,
+        showLeftEllipsis: startPage > 1,
+        showRightEllipsis: endPage < totalPages,
+      };
+    };
+
+    const { pageNumbers, showLeftEllipsis, showRightEllipsis } = getPageNumbers();
+
+  if (isLoading) {
+    return (
+      <div className="products-container">
+        <div className="loading">Cargando productos...</div>
+      </div>
+    );
+  }
 
   return (
     <div className='products-container'>
@@ -82,21 +123,6 @@ const Products = () => {
         />
 
         <div className="filters-selects">
-          <div className={`select-container ${isCatOpen ? "cat-open" : ""}`} ref={catRef}>
-            <select 
-            value={category} 
-            onClick={() => setIsCatOpen((prev) => !prev)}
-            onBlur={() => setTimeout(() => setIsCatOpen(false), 200)}
-            onChange={(e) => {
-              setCategory(e.target.value);
-              setCurrentPage(1);
-              setTimeout(() => setIsCatOpen(false), 100);
-            }}>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
           
           <div className={`select-container ${isPriceOpen ? "price-open" : ""}`} ref={priceRef}>
             <select 
@@ -116,20 +142,24 @@ const Products = () => {
         </div>
       </div>
 
+      <div className="results-count">
+        Mostrando {filteredData.length.toLocaleString()} resultados
+      </div>
+
       <div className="product-list">
         {currentProducts.map((product) => (
           <div 
           key={product.id} 
           className="product-card"
           >
-            <p className="product-name">{product.name}</p>
+            <p className="product-name">{product.title}</p>
             <img 
-            src="https://i0.wp.com/ricedh.org/wp-content/uploads/2020/11/qi-bin-w4hbafegiac-unsplash.jpg?fit=1600%2C1066&ssl=1" 
-            alt={`Imagen de ${product.name}`} 
+            src={product.thumbnail || "https://i0.wp.com/ricedh.org/wp-content/uploads/2020/11/qi-bin-w4hbafegiac-unsplash.jpg?fit=1600%2C1066&ssl=1"}
+            alt={`Imagen de ${product.title}`} 
             className="product-image"
             />
             <p className="product-price">${product.price}</p>
-            <p className="product-category">Categoría: {product.category}</p>
+            <p className="product-condition">Condición: {product.condition === "new" ? "Nuevo" : "Usado"}</p>
             <RouteButton text="Ver Producto" route={`/products/${product.id}`} />
           </div>
         ))};
@@ -141,17 +171,29 @@ const Products = () => {
         onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
         disabled={currentPage === 1}
         >
-          {"<"} Anterior
+          Anterior
         </button>
 
-        <span>Página {currentPage} de {totalPages}</span>
+        {showLeftEllipsis && <span className="pagination-ellipsis">...</span>}
+
+        {pageNumbers.map((page) => (
+          <button
+          key={page}
+          className={`pagination-button ${currentPage === page ? 'active' : ''}`}
+          onClick={() => setCurrentPage(page)}
+          >
+            {page}
+          </button>
+        ))}
+
+        {showRightEllipsis && <span className='pagination-ellipsis'>...</span>}
 
         <button
         className='pagination-button'
         onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
         disabled={currentPage === totalPages}
         >
-          Siguiente {">"}
+          Siguiente
         </button>
       </div>
 

@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ACCESS_TOKEN = 'APP_USR-1844316705046675-040913-8f05e0ea4c8cf14d15cb03f18eb49609-86060871';
+const ACCESS_TOKEN = 'APP_USR-1844316705046675-041113-911ac95f06dcadec84692e19072b3643-86060871';
 const USER_ID = '86060871';
 
 app.get("/api/ml/items-details", async (req, res) => {
@@ -55,16 +55,16 @@ app.get("/api/ml/items-details", async (req, res) => {
             );
 
             const batchItems = response.data
-                .filter(item => item.body.available_quantity > 0)
+                .filter(item => item.body.available_quantity > 0 && item.body.status === "active")
                 .map(item => ({
                     id: item.body.id,
                     title: item.body.title,
-                    category_id: item.body.category_id,
                     price: item.body.price,
                     available_quantity: item.body.available_quantity,
                     condition: item.body.condition,
                     pictures: item.body.pictures.map(pic => pic.url),
-                    descriptions: item.body.descriptions
+                    thumbnail: item.body.thumbnail,
+                    status: item.body.status
                 }));
 
                 detailedItems.push(...batchItems);
@@ -89,7 +89,7 @@ app.get("/api/ml/item", async (req, res) => {
     try {
             const detailedItems = [];
             const response = await axios.get(
-                `https://api.mercadolibre.com/items?ids=MLA868924988`,
+                `https://api.mercadolibre.com/items?ids=MLA904096666`,
                 {
                     headers: {
                         Authorization: `Bearer ${ACCESS_TOKEN}`
@@ -99,7 +99,15 @@ app.get("/api/ml/item", async (req, res) => {
 
             const batchItems = response.data
                 .map(item => ({
-                    descripciones: item.body.descriptions
+                    id: item.body.id,
+                    title: item.body.title,
+                    category_id: item.body.category_id,
+                    price: item.body.price,
+                    available_quantity: item.body.available_quantity,
+                    condition: item.body.condition,
+                    pictures: item.body.pictures.map(pic => pic.url),
+                    thumbnail: item.body.thumbnail,
+                    status: item.body.status
                 }));
 
                 detailedItems.push(...batchItems);
