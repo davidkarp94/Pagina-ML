@@ -3,8 +3,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 1.5rem 2rem;
-    background-color: black;
-    color: white;
+    background-color: var(--yellow);
+    color: var(--blue);
 
     height: 9rem;
 }
@@ -12,11 +12,11 @@
 .logo a {
     cursor: pointer;
     font-size: 2.5rem;
-    color: white;
+    color: var(--blue);
 }
 
 .logo:visited {
-    color: white;
+    color: var(--blue);
 }
 
 .navbar-links-container {
@@ -27,14 +27,14 @@
 }
 
 .navbar-links-container a {
-    color: red;
+    color: var(--blue);
     cursor: pointer;
 
     transition: all .3s ease-in-out;
 }
 
 .navbar-links-container a:hover {
-    color: white;
+    color: var(--light-blue);
 }
 
 .cart-container {
@@ -49,11 +49,11 @@
 
 
 .cart-container:hover {
-    color: red;
+    color: var(--light-blue);
 }
 
 .cart-count {
-    background-color: red;
+    background-color: var(--red);
     color: white;
     border-radius: 50%;
     font-weight: bold;
