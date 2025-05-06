@@ -71,17 +71,18 @@ const Product = () => {
         items={images}
         showNav={true}
         showThumbnails={true}
-        thumbnailPosition="left"
+        thumbnailPosition="bottom"
         showFullscreenButton={true}
         showPlayButton={false}
         autoPlay={false}
         slideDuration={450}
+        disableThumbnailScroll={true}
         additionalClass="product-image-gallery"
       />
 
-      <p><strong>Precio:</strong> ${product.price}</p>
-      <p><strong>Condición:</strong> {product.condition === "new" ? "Nuevo" : "Usado"}</p>
-      <p><strong>Stock:</strong> {product.available_quantity} {product.available_quantity === 1 ? "Unidad" : "Unidades"}</p>
+      <p className='product-text'><strong>Stock:</strong> {product.available_quantity} {product.available_quantity === 1 ? "Unidad" : "Unidades"}</p>
+      <p className='product-text'><strong>Condición:</strong> {product.condition === "new" ? "Nuevo" : "Usado"}</p>
+      <p className='product-price'><strong>Precio: ${product.price}</strong></p>
       <button
       className="buy-button"
       onClick={handleAddToCart}

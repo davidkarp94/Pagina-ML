@@ -9,8 +9,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ACCESS_TOKEN = 'APP_USR-1844316705046675-041113-911ac95f06dcadec84692e19072b3643-86060871';
-const USER_ID = '86060871';
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const USER_ID = process.env.USER_ID;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+
 
 app.get("/api/ml/items-details", async (req, res) => {
     try {
