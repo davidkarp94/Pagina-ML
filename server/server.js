@@ -3,17 +3,101 @@ const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
 const fs = require("fs").promises;
+const path = require("path");
+const mysql = require("mysql2/promise");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
-const USER_ID = process.env.USER_ID;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const USER_ID = process.env.USER_ID;
+const TOKEN_FILE = path.join(__dirname, "tokens.json");
 
+const dbConfig = {
+    host: "localhost",
+    user: "root",
+    password: "Panconpalta1",
+    database: "mercado_libre",
+    connectionLimit: 10,
+};
+const pool = mysql.createPool(dbConfig);
+
+let tokens = {
+    access_token: process.env.ACCESS_TOKEN,
+    refresh_token: process.env.REFRESH_TOKEN || "",
+    expires_at: 0,
+};
+
+async function loadTokens() {
+    try {
+        const data = await fs.readFile(TOKEN_FILE, "utf8");
+        tokens = JSON.parse(data);
+    } catch (error) {
+        if (error.code !== "ENOENT") {
+            console.error("Error loading tokens: ", error.message);
+        }
+        await saveTokens();
+    }
+}
+
+async function saveTokens() {
+    try {
+        await fs.writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2));
+    } catch (error) {
+        console.error("Error saving tokens: ", error.message);
+    }
+}
+
+async function refreshAccessToken() {
+    try {
+        const response = await axios.post(
+            "https://api.mercadolibre.oauth/token",
+            {
+                grant_type: "refresh_token",
+                client_id: CLIENT_ID,
+                client_secret: CLIENT_SECRET,
+                refresh_token: tokens.refresh_token,
+            },
+            {
+                headers: {
+                    accept: "application/json",
+                    "content-type": "application/x-www-form-urlencoded",
+                },
+            }
+        );
+
+        const { access_token, refresh_token, expires_in } = response.data;
+        tokens = {
+            access_token,
+            refresh_token,
+            expires_at: Date.now() + expires_in * 1000,
+        };
+        await saveTokens();
+        console.log("Access token refreshed successfully");
+        return access_token;
+    } catch (error) {
+        console.error("Error refreshing token: ", error.response?.data || error.message);
+        throw new Error("Failed to refresh access token");
+    }
+}
+
+async function ensureValidToken(req, res, next) {
+    try {
+        await loadTokens();
+        if (!tokens.access_token || Date.now() >= tokens.expires_at - 60000) {
+            tokens.access_token = await refreshAccessToken();
+        }
+        req.accessToken = tokens.access_token;
+        next();
+    } catch (error) {
+        res.status(500).json({ error: "Aunthentication error" });
+    }
+}
+
+app.use("/api/ml", ensureValidToken);
 
 app.get("/api/ml/items-details", async (req, res) => {
     try {
@@ -52,7 +136,7 @@ app.get("/api/ml/items-details", async (req, res) => {
                 `https://api.mercadolibre.com/items?ids=${idsString}`,
                 {
                     headers: {
-                        Authorization: `Bearer ${ACCESS_TOKEN}`
+                        Authorization: `Bearer ${req.accessToken}`
                     }
                 }
             );
@@ -74,8 +158,31 @@ app.get("/api/ml/items-details", async (req, res) => {
                 console.log(`${detailedItems.length} items de ${allItemIds.length}`);
         }
 
+        const connection = await pool.getConnection();
+        try {
+            await connection.query("TRUNCATE TABLE items");
+            for (const item of detailedItems) {
+                await connection.query(
+                `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                    item.id,
+                    item.title,
+                    item.price,
+                    item.available_quantity,
+                    item.condition,
+                    JSON.stringify(item.pictures),
+                    item.thumbnail,
+                    item.status,
+                    ]
+                );
+            }
+        } finally {
+            connection.release();
+        }
+    
         const outputString = JSON.stringify(detailedItems, null, 2);
-        await fs.writeFile('items-details.txt', outputString);
+        await fs.writeFile("items-details.txt", outputString);
 
         res.json({
             success: true,
@@ -95,7 +202,7 @@ app.get("/api/ml/item", async (req, res) => {
                 `https://api.mercadolibre.com/items?ids=MLA904096666`,
                 {
                     headers: {
-                        Authorization: `Bearer ${ACCESS_TOKEN}`
+                        Authorization: `Bearer ${req.accessToken}`
                     }
                 }
             );
@@ -122,6 +229,23 @@ app.get("/api/ml/item", async (req, res) => {
     } catch (error) {
         console.error("Error al obtener los detalles: ", error.message);
         res.status(500).json({ error: "Error al obtener los detalles de los items" });
+    }
+});
+
+app.get("/api/ml/items", async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM items");
+        res.json({
+            success: true,
+            total: rows.length,
+            items: rows.map((row) => ({
+                ...row,
+                pictures: JSON.parse(row.pictures),
+            })),
+        });
+    } catch (error) {
+        console.error("Error fetching items from database: ", error.message);
+        res.status(500).json({ error: "Error fetching items from database" });
     }
 });
 
