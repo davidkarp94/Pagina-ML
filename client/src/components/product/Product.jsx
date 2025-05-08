@@ -15,13 +15,12 @@ const Product = () => {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await fetch('/items-details.txt');
+        const response = await fetch('/api/ml/items');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const text = await response.text();
-        const data = JSON.parse(text);
-        const foundProduct = data.find((p) => p.id === id);
+        const data = await response.json();
+        const foundProduct = data.items.find((p) => p.id === id);
         setProduct(foundProduct);
       } catch (error) {
         console.error('Error fetching product: ', error);
