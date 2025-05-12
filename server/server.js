@@ -2,9 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
-const fs = require("fs").promises;
-const path = require("path");
-const mysql = require("mysql2/promise");
+const { Pool } = require("pg");
 
 const app = express();
 
@@ -14,47 +12,65 @@ app.use(express.json());
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const USER_ID = process.env.USER_ID;
-const TOKEN_FILE = path.join(__dirname, "tokens.json");
 
 const dbConfig = {
-    host: "localhost",
-    user: "root",
-    password: "Panconpalta1",
-    database: "mercado_libre",
-    connectionLimit: 10,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
+    port: process.env.DB_PORT,
+    ssl: { rejectUnauthorized: true },
 };
-const pool = mysql.createPool(dbConfig);
+const pool = new Pool(dbConfig);
 
 let tokens = {
-    access_token: process.env.ACCESS_TOKEN,
+    access_token: process.env.ACCESS_TOKEN || "",
     refresh_token: process.env.REFRESH_TOKEN || "",
     expires_at: 0,
 };
 
 async function loadTokens() {
     try {
-        const data = await fs.readFile(TOKEN_FILE, "utf8");
-        tokens = JSON.parse(data);
-    } catch (error) {
-        if (error.code !== "ENOENT") {
-            console.error("Error loading tokens: ", error.message);
+        const { rows } = await pool.query("SELECT * FROM tokens WHERE id = 1");
+        if (rows.length > 0) {
+            tokens = {
+                access_token: rows[0].access_token,
+                refresh_token: rows[0].refresh_token,
+                expires_at: rows[0].expires_at,
+            };
+        } else {
+            await saveTokens();
         }
+    } catch (error) {
+        console.error("Error loading tokens from PostgreSQL: ", error.message);
         await saveTokens();
     }
 }
 
 async function saveTokens() {
     try {
-        await fs.writeFile(TOKEN_FILE, JSON.stringify(tokens, null, 2));
+        await pool.query(
+            `INSERT INTO tokens (id, access_token, refresh_token, expires_at)
+            VALUES (1, $1, $2, $3)
+            ON CONFLICT (id)
+            DO UPDATE SET
+            access_token = EXCLUDED.access_token,
+            refresh_token = EXCLUDED.refresh_token,
+            expires_at = EXCLUDED.expires_at`,
+            [tokens.access_token, tokens.refresh_token, tokens.expires_at]
+        );
     } catch (error) {
-        console.error("Error saving tokens: ", error.message);
+        console.error("Error saving tokens to PostgreSQL: ", error.message);
     }
 }
 
 async function refreshAccessToken() {
+    if (!CLIENT_ID || !CLIENT_SECRET || !tokens.refresh_token) {
+        throw new Error("Missing CLIENT_ID, CLIENT_SECRET or REFRESH_TOKEN");
+    }
     try {
         const response = await axios.post(
-            "https://api.mercadolibre.oauth/token",
+            "https://api.mercadolibre.com/oauth/token",
             {
                 grant_type: "refresh_token",
                 client_id: CLIENT_ID,
@@ -76,11 +92,11 @@ async function refreshAccessToken() {
             expires_at: Date.now() + expires_in * 1000,
         };
         await saveTokens();
-        console.log("Access token refreshed successfully");
+        console.log("Access Token refreshed successfully");
         return access_token;
     } catch (error) {
-        console.error("Error refreshing token: ", error.response?.data || error.message);
-        throw new Error("Failed to refresh access token");
+        console.error("Token refresh error: ", error.response?.data || error.message);
+        throw new Error(`Failed to refresh access token: ${error.response?.data?.message || error.message}`);
     }
 }
 
@@ -93,7 +109,8 @@ async function ensureValidToken(req, res, next) {
         req.accessToken = tokens.access_token;
         next();
     } catch (error) {
-        res.status(500).json({ error: "Aunthentication error" });
+        console.error("Authentication middleware error: ", error.message);
+        res.status(500).json({ error: "Authentication error", details: error.message });
     }
 }
 
@@ -113,7 +130,7 @@ app.get("/api/ml/items-details", async (req, res) => {
 
             const { data } = await axios.get(url, {
                 headers: {
-                    Authorization: `Bearer ${ACCESS_TOKEN}`
+                    Authorization: `Bearer ${req.accessToken}`
                 }
             });
 
@@ -158,83 +175,47 @@ app.get("/api/ml/items-details", async (req, res) => {
                 console.log(`${detailedItems.length} items de ${allItemIds.length}`);
         }
 
-        const connection = await pool.getConnection();
+        const client = await pool.connect();
         try {
-            await connection.query("TRUNCATE TABLE items");
-            for (const item of detailedItems) {
-                await connection.query(
-                `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                    item.id,
-                    item.title,
-                    item.price,
-                    item.available_quantity,
-                    item.condition,
-                    JSON.stringify(item.pictures),
-                    item.thumbnail,
-                    item.status,
-                    ]
+            await client.query("TRUNCATE TABLE items");
+            const values = detailedItems.map(item => [
+                item.id,
+                item.title,
+                item.price,
+                item.available_quantity,
+                item.condition,
+                JSON.stringify(item.pictures),
+                item.thumbnail,
+                item.status,
+            ]);
+            if (values.length > 0) {
+                await client.query(
+                    `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
+                    VALUES ${values.map((_, i) => `($${i * 8 + 1}, $${i * 8 + 2}, $${i * 8 + 3}, $${i * 8 + 4}, $${i * 8 + 5}, $${i * 8 + 6}, $${i * 8 + 7}, $${i * 8 + 8})`).join(", ")}`,
+                    values.flat()
                 );
             }
+        } catch (dbError) {
+            console.error("PostgreSQL error: ", dbError.message);
+            throw new Error(`Failed to save items to PostgreSQL: ${dbError.message}`);
         } finally {
-            connection.release();
+            client.release();
         }
-    
-        const outputString = JSON.stringify(detailedItems, null, 2);
-        await fs.writeFile("items-details.txt", outputString);
 
         res.json({
             success: true,
             total: detailedItems.length,
-            items: detailedItems
+            items: detailedItems,
         });
     } catch (error) {
         console.error("Error al obtener los detalles: ", error.message);
-        res.status(500).json({ error: "Error al obtener los detalles de los items" });
-    }
-});
-
-app.get("/api/ml/item", async (req, res) => {
-    try {
-            const detailedItems = [];
-            const response = await axios.get(
-                `https://api.mercadolibre.com/items?ids=MLA904096666`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${req.accessToken}`
-                    }
-                }
-            );
-
-            const batchItems = response.data
-                .map(item => ({
-                    id: item.body.id,
-                    title: item.body.title,
-                    category_id: item.body.category_id,
-                    price: item.body.price,
-                    available_quantity: item.body.available_quantity,
-                    condition: item.body.condition,
-                    pictures: item.body.pictures.map(pic => pic.url),
-                    thumbnail: item.body.thumbnail,
-                    status: item.body.status
-                }));
-
-                detailedItems.push(...batchItems);
-                console.log(`${detailedItems.length} items de `);
-
-        res.json({
-            detailedItems
-        });
-    } catch (error) {
-        console.error("Error al obtener los detalles: ", error.message);
-        res.status(500).json({ error: "Error al obtener los detalles de los items" });
+        res.status(500).json({ error: "Error al obtener los detalles de los items", details: error.message });
     }
 });
 
 app.get("/api/ml/items", async (req, res) => {
     try {
-        const [rows] = await pool.query("SELECT * FROM items");
+        const { rows } = await pool.query("SELECT * FROM items");
         res.json({
             success: true,
             total: rows.length,
@@ -245,11 +226,23 @@ app.get("/api/ml/items", async (req, res) => {
         });
     } catch (error) {
         console.error("Error fetching items from database: ", error.message);
-        res.status(500).json({ error: "Error fetching items from database" });
+        res.status(500).json({ error: "Error fetching items from database: ", details: error.message });
     }
 });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-    console.log(`Servidor corriendo en el puerto ${PORT}`);
-})
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, async () => {
+    try {
+        await pool.query(
+            `CREATE TABLE IF NOT EXISTS tokens (
+                id INTEGER PRIMARY KEY,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT NOT NULL,
+                expires_at BIGINT NOT NULL
+            )`
+        );
+        await loadTokens();
+    } catch (error) {
+        console.error("Error initializing tokens table: ", error.message);
+    }
+});
