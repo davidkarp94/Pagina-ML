@@ -116,98 +116,120 @@ async function ensureValidToken(req, res, next) {
 
 app.use("/api/ml", ensureValidToken);
 
+async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
+    const allItemIds = [];
+    let scrollId = null;
+    let keepScrolling = true;
+
+    while (keepScrolling && allItemIds.length < maxItems) {
+        let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
+        if (scrollId) {
+            url += `&scroll_id=${encodeURIComponent(scrollId)}`;
+        }
+
+        const { data } = await axios.get(url, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            },
+        });
+
+        const itemIds = data.results || [];
+        allItemIds.push(...itemIds.slice(0, maxItems - allItemIds.length));
+
+        if (itemIds.length === 0 || !data.scroll_id || allItemIds.length >= maxItems) {
+            keepScrolling = false;
+        } else {
+            scrollId = data.scroll_id;
+        }
+    }
+
+    const uniqueItemIds = [...new Set(allItemids)];
+    
+    const detailedItems = [];
+    for (let i = 0; i < uniqueItemIds.length; i += 20) {
+        const batchIds = uniqueItemIds.slice(i, i + 20);
+        const idsString = batchIds.join(",");
+
+        const response = await axios.get(
+            `https://api.mercadolibre.com/items?ids=${idsString}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`
+                },
+            }
+        );
+
+        const batchItems = response.data
+            .filter(
+                (item) => item.body.available_quantity > 0 && item.body.status === "active"
+            )
+            .map((item) => ({
+                id: item.body.id,
+                title: item.body.title,
+                price: item.body.price,
+                available_quantity: item.body.available_quantity,
+                condition: item.body.condition,
+                pictures: item.body.pictures.map((pic) => pic.url),
+                thumbnail: item.body.thumbnail,
+                status: item.body.status,
+            }));
+
+            detailedItems.push(...batchItems);
+            console.log(`Processed ${detailedItems.length} items of ${uniqueItemIds.length}`);
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        await client.query("TRUNCATE TABLE items");
+
+        const batchSize = 100;
+        for (let i = 0; i < detailedItems.length; i += batchSize) {
+            const batch = detailedItems.slice(i, i + batchSize);
+            const values = batch.map(item => [
+                item.id,
+                item.title,
+                item.price,
+                item.available_quantity,
+                item.condition,
+                JSON.stringify(item.pictures),
+                item.thumbnail,
+                item.status
+            ]);
+
+            if (values.length > 0) {
+                const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
+                await client.query(
+                `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
+                VALUES ${placeholders}
+                ON CONFLICT (id) DO UPDATE SET
+                title = EXCLUDED.title,
+                price = EXCLUDED.price,
+                available_quantity = EXCLUDED.available_quantity,
+                condition = EXCLUDED.condition,
+                pictures = EXCLUDED.pictures,
+                thumbnail = EXCLUDED.thumbnail,
+                status = EXCLUDED.status`,
+                values.flat()
+                );
+            }
+        }
+
+        await client.query("COMMIT");
+    } catch (dbError) {
+        await client.query("ROLLBACK");
+        console.error("PostgreSQL error: ", dbError.message);
+        throw new Error(`Failed to save items to PostgerSQL: ${dbError.message}`);
+    } finally {
+        client.release();
+    }
+
+    return detailedItems;
+}
+
 app.get("/api/ml/items-details", async (req, res) => {
     try {
-        const allItemIds = [];
-        let scrollId = null;
-        let keepScrolling = true;
-
-        while (keepScrolling) {
-            let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
-            if (scrollId) {
-                url += `&scroll_id=${encodeURIComponent(scrollId)}`;
-            }
-
-            const { data } = await axios.get(url, {
-                headers: {
-                    Authorization: `Bearer ${req.accessToken}`
-                }
-            });
-
-            const itemIds = data.results || [];
-            allItemIds.push(...itemIds);
-
-            if (itemIds.length === 0 || !data.scroll_id) {
-                keepScrolling = false;
-            } else {
-                scrollId = data.scroll_id;
-            }
-        }
-
-        const detailedItems = [];
-        for (let i = 0; i < allItemIds.length; i += 20) {
-            const batchIds = allItemIds.slice(i, i + 20);
-            const idsString = batchIds.join(',');
-
-            const response = await axios.get(
-                `https://api.mercadolibre.com/items?ids=${idsString}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${req.accessToken}`
-                    }
-                }
-            );
-
-            const batchItems = response.data
-                .filter(item => item.body.available_quantity > 0 && item.body.status === "active")
-                .map(item => ({
-                    id: item.body.id,
-                    title: item.body.title,
-                    price: item.body.price,
-                    available_quantity: item.body.available_quantity,
-                    condition: item.body.condition,
-                    pictures: item.body.pictures.map(pic => pic.url),
-                    thumbnail: item.body.thumbnail,
-                    status: item.body.status
-                }));
-
-                detailedItems.push(...batchItems);
-                console.log(`${detailedItems.length} items de ${allItemIds.length}`);
-        }
-
-        const client = await pool.connect();
-        try {
-            await client.query("TRUNCATE TABLE items");
-            
-            const batchSize = 100;
-            for (let i = 0; i < detailedItems.length; i += batchSize) {
-                const batch = detailedItems.slice(i, 1 + batchSize);
-                const values = batch.map(item => [
-                    item.id,
-                    item.title,
-                    item.price,
-                    item.available_quantity,
-                    item.condition,
-                    JSON.stringify(item.pictures),
-                    item.thumbnail,
-                    item.status,
-                ])
-                if (values.length > 0) {
-                    const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
-                    await client.query(
-                        `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
-                        VALUES ${placeholders}`,
-                        values.flat()
-                    );
-                }
-            }
-        } catch (dbError) {
-            console.error("PostgreSQL error: ", dbError.message);
-            throw new Error(`Failed to save items to PostgreSQL: ${dbError.message}`);
-        } finally {
-            client.release();
-        }
-
+        const detailedItems = await fetchAndSaveItems(req.accessToken);
         res.json({
             success: true,
             total: detailedItems.length,
@@ -216,6 +238,20 @@ app.get("/api/ml/items-details", async (req, res) => {
     } catch (error) {
         console.error("Error al obtener los detalles: ", error.message);
         res.status(500).json({ error: "Error al obtener los detalles de los items", details: error.message });
+    }
+});
+
+app.get("/api/ml/items-details-test", async (req, res) => {
+    try {
+        const detailedItems = await fetchAndSaveItems(req.accessToken, 100);
+        res.json({
+            success: true,
+            total: detailedItems.length,
+            items: detailedItems,
+        });
+    } catch (error) {
+        console.error("Error al obtener los detalles (test): ", error.message);
+        res.status(500).json({ error: "Error al obtener los detalles de los items (test)", details: error.message });
     }
 });
 
