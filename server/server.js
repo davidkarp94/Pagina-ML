@@ -178,22 +178,28 @@ app.get("/api/ml/items-details", async (req, res) => {
         const client = await pool.connect();
         try {
             await client.query("TRUNCATE TABLE items");
-            const values = detailedItems.map(item => [
-                item.id,
-                item.title,
-                item.price,
-                item.available_quantity,
-                item.condition,
-                JSON.stringify(item.pictures),
-                item.thumbnail,
-                item.status,
-            ]);
-            if (values.length > 0) {
-                await client.query(
-                    `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
-                    VALUES ${values.map((_, i) => `($${i * 8 + 1}, $${i * 8 + 2}, $${i * 8 + 3}, $${i * 8 + 4}, $${i * 8 + 5}, $${i * 8 + 6}, $${i * 8 + 7}, $${i * 8 + 8})`).join(", ")}`,
-                    values.flat()
-                );
+            
+            const batchSize = 100;
+            for (let i = 0; i < detailedItems.length; i += batchSize) {
+                const batch = detailedItems.slice(i, 1 + batchSize);
+                const values = batch.map(item => [
+                    item.id,
+                    item.title,
+                    item.price,
+                    item.available_quantity,
+                    item.condition,
+                    JSON.stringify(item.pictures),
+                    item.thumbnail,
+                    item.status,
+                ])
+                if (values.length > 0) {
+                    const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
+                    await client.query(
+                        `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
+                        VALUES ${placeholders}`,
+                        values.flat()
+                    );
+                }
             }
         } catch (dbError) {
             console.error("PostgreSQL error: ", dbError.message);
