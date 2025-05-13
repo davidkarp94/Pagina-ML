@@ -298,7 +298,7 @@ app.get("/api/ml/items-details", async (req, res) => {
 
 app.get("/api/ml/items-details-test", async (req, res) => {
     try {
-        const detailedItems = await fetchAndSaveItems(req.accessToken, 1000);
+        const detailedItems = await fetchAndSaveItems(req.accessToken, 5000);
         if (detailedItems.length === 0) {
             return res.status(200).json({
                 success: true,
