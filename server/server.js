@@ -143,7 +143,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
         }
     }
 
-    const uniqueItemIds = [...new Set(allItemids)];
+    const uniqueItemIds = [...new Set(allItemIds)];
     
     const detailedItems = [];
     for (let i = 0; i < uniqueItemIds.length; i += 20) {
