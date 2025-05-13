@@ -41,6 +41,10 @@ async function loadTokens() {
         } else {
             await saveTokens();
         }
+        console.log("Tokens loaded:", {
+            access_token: tokens.access_token ? "[REDACTED]" : "null",
+            expires_at: tokens.expires_at,
+        });
     } catch (error) {
         console.error("Error loading tokens from PostgreSQL: ", error.message);
         await saveTokens();
@@ -59,6 +63,7 @@ async function saveTokens() {
             expires_at = EXCLUDED.expires_at`,
             [tokens.access_token, tokens.refresh_token, tokens.expires_at]
         );
+        console.log("Tokens saved to PostgreSQL");
     } catch (error) {
         console.error("Error saving tokens to PostgreSQL: ", error.message);
     }
@@ -107,6 +112,9 @@ async function ensureValidToken(req, res, next) {
             tokens.access_token = await refreshAccessToken();
         }
         req.accessToken = tokens.access_token;
+        console.log("Token validated for request: ", {
+            access_token: tokens.access_token ? "[REDACTED]" : "null",
+        });
         next();
     } catch (error) {
         console.error("Authentication middleware error: ", error.message);
@@ -127,41 +135,73 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
             url += `&scroll_id=${encodeURIComponent(scrollId)}`;
         }
 
-        const { data } = await axios.get(url, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`
-            },
-        });
+        let response;
+        try {
+            response = await axios.get(url, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            console.log("Search API response: ", {
+                status: response.status,
+                results_length: response.data.results?.length || 0,
+                scroll_id: response.data.scroll_id || null
+            });
+        } catch (error) {
+            console.error("Search API error: ", error.response?.data || error.message);
+            throw new Error(`Failed to fetch item IDs: ${error.response?.data?.message || error.message}`);
+        }
 
-        const itemIds = data.results || [];
+        const itemIds = response.data.results || [];
         allItemIds.push(...itemIds.slice(0, maxItems - allItemIds.length));
 
-        if (itemIds.length === 0 || !data.scroll_id || allItemIds.length >= maxItems) {
+        if (itemIds.length === 0 || !response.data.scroll_id || allItemIds.length >= maxItems) {
             keepScrolling = false;
         } else {
-            scrollId = data.scroll_id;
+            scrollId = response.data.scroll_id;
         }
     }
 
     const uniqueItemIds = [...new Set(allItemIds)];
+    console.log(`Fetched ${uniqueItemIds} unique item IDs`);
+
+    if (uniqueItemIds.length === 0) {
+        console.warn("No item IDs fetched from MercadoLibre API");
+        return [];
+    }
     
     const detailedItems = [];
     for (let i = 0; i < uniqueItemIds.length; i += 20) {
         const batchIds = uniqueItemIds.slice(i, i + 20);
         const idsString = batchIds.join(",");
 
-        const response = await axios.get(
-            `https://api.mercadolibre.com/items?ids=${idsString}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`
-                },
-            }
-        );
+        let response;
+        try {
+            response = await axios.get(
+                `https://api.mercadolibre.com/items?ids=${idsString}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`
+                    },
+                }
+            );
+            console.log("Items API response: ", {
+                status: response.status,
+                items_length: response.data.length,
+                first_item: response.data[0]?.body.id ? {
+                    id: response.data[0].body.id,
+                    available_quantity: response.data[0].body.available_quantity,
+                    status: response.data[0].body.status,
+                } : null,
+            });
+        } catch (error) {
+            console.error("Items API error: ", error.response?.data || error.message);
+            throw new Error(`Failed to fetch item dedtails: ${error.response?.data?.message | error.message}`);
+        }
 
         const batchItems = response.data
             .filter(
-                (item) => item.body.available_quantity > 0 && item.body.status === "active"
+                (item) => item.body?.available_quantity > 0 && item.body?.status === "active"
             )
             .map((item) => ({
                 id: item.body.id,
@@ -169,7 +209,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
                 price: item.body.price,
                 available_quantity: item.body.available_quantity,
                 condition: item.body.condition,
-                pictures: item.body.pictures.map((pic) => pic.url),
+                pictures: item.body.pictures.map((pic) => pic.url) || [],
                 thumbnail: item.body.thumbnail,
                 status: item.body.status,
             }));
@@ -178,10 +218,16 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
             console.log(`Processed ${detailedItems.length} items of ${uniqueItemIds.length}`);
     }
 
+    if (detailedItems.length === 0) {
+        console.warn("No valid items found");
+        return [];
+    }
+
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
         await client.query("TRUNCATE TABLE items");
+        console.log(`Saving ${detailedItems.length} items to PostgreSQL`);
 
         const batchSize = 100;
         for (let i = 0; i < detailedItems.length; i += batchSize) {
@@ -200,18 +246,19 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
             if (values.length > 0) {
                 const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
                 await client.query(
-                `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
-                VALUES ${placeholders}
-                ON CONFLICT (id) DO UPDATE SET
-                title = EXCLUDED.title,
-                price = EXCLUDED.price,
-                available_quantity = EXCLUDED.available_quantity,
-                condition = EXCLUDED.condition,
-                pictures = EXCLUDED.pictures,
-                thumbnail = EXCLUDED.thumbnail,
-                status = EXCLUDED.status`,
-                values.flat()
+                    `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
+                    VALUES ${placeholders}
+                    ON CONFLICT (id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    price = EXCLUDED.price,
+                    available_quantity = EXCLUDED.available_quantity,
+                    condition = EXCLUDED.condition,
+                    pictures = EXCLUDED.pictures,
+                    thumbnail = EXCLUDED.thumbnail,
+                    status = EXCLUDED.status`,
+                    values.flat()
                 );
+                console.log(`Inserted batch ${i / batchSize + 1} with ${values.length} items`);
             }
         }
 
@@ -230,21 +277,37 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
 app.get("/api/ml/items-details", async (req, res) => {
     try {
         const detailedItems = await fetchAndSaveItems(req.accessToken);
+        if (detailedItems.length === 0) {
+            return res.status(200).json({
+                success: true,
+                total: 0,
+                items: [],
+                message: "No items found"
+            });
+        }
         res.json({
             success: true,
             total: detailedItems.length,
-            items: detailedItems,
+            items: detailedItems
         });
     } catch (error) {
-        console.error("Error al obtener los detalles: ", error.message);
-        res.status(500).json({ error: "Error al obtener los detalles de los items", details: error.message });
+        console.error("Error obtaining items: ", error.message);
+        res.status(500).json({ error: "Error obtaining items", details: error.message });
     }
 });
 
 app.get("/api/ml/items-details-test", async (req, res) => {
     try {
         const detailedItems = await fetchAndSaveItems(req.accessToken, 100);
-        res.json({
+        if (detailedItems.length === 0) {
+            return res.status(200).json({
+                success: true,
+                total: 0,
+                items: [],
+                message: "No active items with available quantity found for test",
+            });
+        }
+            res.json({
             success: true,
             total: detailedItems.length,
             items: detailedItems,
