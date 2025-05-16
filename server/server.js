@@ -151,11 +151,6 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
                     Authorization: `Bearer ${accessToken}`,
                 },
             });
-            console.log("Search API response: ", {
-                status: response.status,
-                results_length: response.data.results?.length || 0,
-                scroll_id: response.data.scroll_id || null
-            });
         } catch (error) {
             console.error("Search API error: ", error.response?.data || error.message);
             throw new Error(`Failed to fetch item IDs: ${error.response?.data?.message || error.message}`);
@@ -199,11 +194,6 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
                     },
                 }
             );
-            console.log("Items API response: ", {
-                status: response.status,
-                items_length: response.data.length,
-                first_item: response.data[0]?.body.id,
-            });
         } catch (error) {
             console.error("Items API error: ", error.response?.data || error.message);
             throw new Error(`Failed to fetch item dedtails: ${error.response?.data?.message | error.message}`);
