@@ -124,12 +124,21 @@ async function ensureValidToken(req, res, next) {
 
 app.use("/api/ml", ensureValidToken);
 
-async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
+async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false) {
+
+    const startTime = Date.now();
+    const timeoutMs = 55000;
+
     const allItemIds = [];
     let scrollId = null;
     let keepScrolling = true;
 
     while (keepScrolling && allItemIds.length < maxItems) {
+        if (Date.now() - startTime > timeoutMs) {
+            console.warn("Operation timed out during item ID fetch");
+            break;
+        }
+
         let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
         if (scrollId) {
             url += `&scroll_id=${encodeURIComponent(scrollId)}`;
@@ -172,6 +181,11 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
     
     const detailedItems = [];
     for (let i = 0; i < uniqueItemIds.length; i += 20) {
+        if (Date.now() - startTime > timeoutMs) {
+            console.warn("Operation timed out during item details fetch");
+            break;
+        }
+
         const batchIds = uniqueItemIds.slice(i, i + 20);
         const idsString = batchIds.join(",");
 
@@ -188,11 +202,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
             console.log("Items API response: ", {
                 status: response.status,
                 items_length: response.data.length,
-                first_item: response.data[0]?.body.id ? {
-                    id: response.data[0].body.id,
-                    available_quantity: response.data[0].body.available_quantity,
-                    status: response.data[0].body.status,
-                } : null,
+                first_item: response.data[0]?.body.id,
             });
         } catch (error) {
             console.error("Items API error: ", error.response?.data || error.message);
@@ -201,7 +211,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
 
         const batchItems = response.data
             .filter(
-                (item) => item.body?.available_quantity > 0 && item.body?.status === "active"
+                (item) => debug || (item.body?.available_quantity > 0 && item.body?.status === "active")
             )
             .map((item) => ({
                 id: item.body.id,
@@ -219,18 +229,25 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
     }
 
     if (detailedItems.length === 0) {
-        console.warn("No valid items found");
+        console.warn("No valid items found after filtering", {
+            debug_mode: debug,
+            filter: debug ? "none" : "available_quantity > 0 and status = active",
+        });
         return [];
     }
 
     const client = await pool.connect();
     try {
-        await client.query("BEGIN");
-        await client.query("TRUNCATE TABLE items");
         console.log(`Saving ${detailedItems.length} items to PostgreSQL`);
+        await client.query("TRUNCATE TABLE items");
 
         const batchSize = 100;
         for (let i = 0; i < detailedItems.length; i += batchSize) {
+            if (Date.now() - startTime > timeoutMs) {
+                console.warn("Operation timed out during database insert");
+                break;
+            }
+
             const batch = detailedItems.slice(i, i + batchSize);
             const values = batch.map(item => [
                 item.id,
@@ -244,32 +261,36 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity) {
             ]);
 
             if (values.length > 0) {
-                const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
-                await client.query(
-                    `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
-                    VALUES ${placeholders}
-                    ON CONFLICT (id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    price = EXCLUDED.price,
-                    available_quantity = EXCLUDED.available_quantity,
-                    condition = EXCLUDED.condition,
-                    pictures = EXCLUDED.pictures,
-                    thumbnail = EXCLUDED.thumbnail,
-                    status = EXCLUDED.status`,
-                    values.flat()
-                );
-                console.log(`Inserted batch ${i / batchSize + 1} with ${values.length} items`);
+                await client.query("BEGIN");
+                try {
+                    const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
+                    await client.query(
+                        `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
+                        VALUES ${placeholders}
+                        ON CONFLICT (id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        price = EXCLUDED.price,
+                        available_quantity = EXCLUDED.available_quantity,
+                        condition = EXCLUDED.condition,
+                        pictures = EXCLUDED.pictures,
+                        thumbnail = EXCLUDED.thumbnail,
+                        status = EXCLUDED.status`,
+                        values.flat()
+                    );
+                    await client.query("COMMIT"); // Commit batch
+                    console.log(`Inserted batch ${i / batchSize + 1} with ${values.length} items`);
+                } catch (dbError) {
+                    await client.query("ROLLBACK"); // Rollback batch on error
+                    throw dbError;
+                }
             }
         }
-
-        await client.query("COMMIT");
-    } catch (dbError) {
-        await client.query("ROLLBACK");
-        console.error("PostgreSQL error: ", dbError.message);
-        throw new Error(`Failed to save items to PostgerSQL: ${dbError.message}`);
-    } finally {
-        client.release();
-    }
+            } catch (dbError) {
+                console.error("PostgreSQL error:", dbError.message);
+                throw new Error(`Failed to save items to PostgreSQL: ${dbError.message}`);
+            } finally {
+                client.release();
+            }
 
     return detailedItems;
 }
@@ -298,19 +319,21 @@ app.get("/api/ml/items-details", async (req, res) => {
 
 app.get("/api/ml/items-details-test", async (req, res) => {
     try {
-        const detailedItems = await fetchAndSaveItems(req.accessToken, 5000);
+        const detailedItems = await fetchAndSaveItems(req.accessToken, 5000, debug);
         if (detailedItems.length === 0) {
             return res.status(200).json({
                 success: true,
                 total: 0,
                 items: [],
-                message: "No active items with available quantity found for test",
+                message: `No valid items found${debug ? "" : " with available quantity and active status"}`,
+                debug: debug,
             });
         }
             res.json({
             success: true,
             total: detailedItems.length,
             items: detailedItems,
+            debug: debug,
         });
     } catch (error) {
         console.error("Error al obtener los detalles (test): ", error.message);
