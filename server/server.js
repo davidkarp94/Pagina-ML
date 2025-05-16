@@ -167,7 +167,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
     }
 
     const uniqueItemIds = [...new Set(allItemIds)];
-    console.log(`Fetched ${uniqueItemIds} unique item IDs`);
+    console.log(`Fetched ${uniqueItemIds.length} unique item IDs`);
 
     if (uniqueItemIds.length === 0) {
         console.warn("No item IDs fetched from MercadoLibre API");
