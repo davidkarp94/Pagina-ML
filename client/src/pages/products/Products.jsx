@@ -7,6 +7,7 @@ const Products = () => {
 
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState("asc");
   const [ brand, setBrand ] = useState("");
@@ -21,15 +22,19 @@ const Products = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('/items-details.txt');
+        const apiUrl = 'https://pagina-ml.onrender.com';
+        const response = await fetch(`${apiUrl}/api/ml/items`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const text = await response.text();
-        const data = JSON.parse(text);
-        setProducts(data);
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to fetch products');
+        }
+        setProducts(data.items);
       } catch (error) {
-        console.error('Error fetching products: ', error);
+        console.error('Error fetching products: ', error.message);
+        setError('No se pudieron cargar los productos. Intenta de nuevo más tarde.')
       } finally {
         setIsLoading(false);
       }
@@ -126,6 +131,14 @@ const Products = () => {
         <div className="loading">Cargando productos...</div>
       </div>
     );
+  }
+  
+  if (error) {
+    return (
+      <div className='products-container'>
+        <div className='error'>{error}</div>
+      </div>
+    )
   }
 
   return (

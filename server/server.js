@@ -318,18 +318,31 @@ app.get("/api/ml/items-details-test", async (req, res) => {
 
 app.get("/api/ml/items", async (req, res) => {
     try {
-        const { rows } = await pool.query("SELECT * FROM items");
+        const { rows } = rows.map((row) => {
+            let pictures = [];
+            try {
+                pictures = JSON.parse(row.pictures);
+                if (!Array.isArray(pictures)) {
+                    console.warn(`Invalid pictures format for item ${row.id}: `, row.pictures);
+                    pictures = [];
+                }
+            } catch (error) {
+                console.warn(`Failed to parse pictures for item ${row.id}`, row.pictures, error.message);
+                pictures = [];
+            }
+            return {
+                ...row,
+                pictures,
+            };
+        });
         res.json({
             success: true,
-            total: rows.length,
-            items: rows.map((row) => ({
-                ...row,
-                pictures: JSON.parse(row.pictures),
-            })),
+            total: items.length,
+            items,
         });
     } catch (error) {
         console.error("Error fetching items from database: ", error.message);
-        res.status(500).json({ error: "Error fetching items from database: ", details: error.message });
+        res.status(500).json({ error: "Error fetching items from database ", details: error.message });
     }
 });
 
