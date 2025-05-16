@@ -126,18 +126,11 @@ app.use("/api/ml", ensureValidToken);
 
 async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false) {
 
-    const startTime = Date.now();
-    const timeoutMs = 55000;
-
     const allItemIds = [];
     let scrollId = null;
     let keepScrolling = true;
 
     while (keepScrolling && allItemIds.length < maxItems) {
-        if (Date.now() - startTime > timeoutMs) {
-            console.warn("Operation timed out during item ID fetch");
-            break;
-        }
 
         let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
         if (scrollId) {
@@ -176,10 +169,6 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
     
     const detailedItems = [];
     for (let i = 0; i < uniqueItemIds.length; i += 20) {
-        if (Date.now() - startTime > timeoutMs) {
-            console.warn("Operation timed out during item details fetch");
-            break;
-        }
 
         const batchIds = uniqueItemIds.slice(i, i + 20);
         const idsString = batchIds.join(",");
@@ -233,10 +222,6 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
 
         const batchSize = 100;
         for (let i = 0; i < detailedItems.length; i += batchSize) {
-            if (Date.now() - startTime > timeoutMs) {
-                console.warn("Operation timed out during database insert");
-                break;
-            }
 
             const batch = detailedItems.slice(i, i + batchSize);
             const values = batch.map(item => [
