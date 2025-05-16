@@ -318,7 +318,8 @@ app.get("/api/ml/items-details-test", async (req, res) => {
 
 app.get("/api/ml/items", async (req, res) => {
     try {
-        const { rows } = rows.map((row) => {
+        const { rows } = await pool.query("SELECT * FROM items");
+        const items = rows.map((row) => {
             let pictures = [];
             try {
                 pictures = JSON.parse(row.pictures);
