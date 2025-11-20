@@ -118,6 +118,71 @@ async function getCategoryName(categoryId, accessToken) {
   }
 }
 
+app.get("/api/ml/add-categories", async (req, res) => {
+  try {
+    console.log("\nAgregando nombres de categorías reales a items.json...\n");
+
+    const items = readItems();
+    if (items.length === 0) {
+      return res.json({ success: false, message: "No hay productos en items.json" });
+    }
+
+    const categoryCache = new Map();
+
+    const getCategoryName = async (categoryId) => {
+      if (!categoryId) return "Sin categoría";
+      if (categoryCache.has(categoryId)) return categoryCache.get(categoryId);
+
+      try {
+        const response = await axios.get(`https://api.mercadolibre.com/categories/${categoryId}`);
+        const path = response.data.path_from_root.map(c => c.name).join(" > ");
+        const name = path || response.data.name || "Categoría no encontrada";
+        categoryCache.set(categoryId, name);
+        return name;
+      } catch (err) {
+        const name = "Categoría no encontrada";
+        categoryCache.set(categoryId, name);
+        return name;
+      }
+    };
+
+    let processed = 0;
+    for (const item of items) {
+      processed++;
+      process.stdout.write(`\rProcesando producto ${processed}/${items.length}`);
+
+      const oldCategory = item.category; // ej: "MLA413683"
+      const categoryName = await getCategoryName(oldCategory);
+
+      // Renombramos y agregamos el nombre real
+      item.category_id = oldCategory;
+      item.category = categoryName;
+
+      await new Promise(r => setTimeout(r, 100)); // ser amables con la API
+    }
+
+    // Guardamos en archivo nuevo
+    const outputFile = path.join(__dirname, "data", "items-with-categories.json");
+    fs.mkdirSync(path.dirname(outputFile), { recursive: true });
+    fs.writeFileSync(outputFile, JSON.stringify(items, null, 2));
+
+    console.log(`\n\n¡Listo! ${items.length} productos con categoría real guardados en:`);
+    console.log(`   ${outputFile}\n`);
+
+    res.json({
+      success: true,
+      message: "Categorías agregadas correctamente",
+      total: items.length,
+      file: "data/items-with-categories.json",
+      example: items[0]
+    });
+
+  } catch (err) {
+    console.error("Error agregando categorías:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // === FUNCIÓN PRINCIPAL CON PROGRESO EN VIVO ===
 async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false) {
     console.log("\nIniciando TEST con nombre de categoría real y descripción...\n");
