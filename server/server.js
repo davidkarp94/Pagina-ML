@@ -2,10 +2,10 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
-const { Pool } = require("pg");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
@@ -13,353 +13,366 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const USER_ID = process.env.USER_ID;
 
-const dbConfig = {
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-    port: process.env.DB_PORT,
-    ssl: { rejectUnauthorized: true },
-};
-const pool = new Pool(dbConfig);
+const DATA_FILE = path.join(__dirname, "data", "items.json");
 
 let tokens = {
-    access_token: process.env.ACCESS_TOKEN || "",
-    refresh_token: process.env.REFRESH_TOKEN || "",
-    expires_at: 0,
+  access_token: process.env.ACCESS_TOKEN || "",
+  refresh_token: process.env.REFRESH_TOKEN || "",
+  expires_at: 0,
 };
 
-async function loadTokens() {
-    try {
-        const { rows } = await pool.query("SELECT * FROM tokens WHERE id = 1");
-        if (rows.length > 0) {
-            tokens = {
-                access_token: rows[0].access_token,
-                refresh_token: rows[0].refresh_token,
-                expires_at: rows[0].expires_at,
-            };
-        } else {
-            await saveTokens();
-        }
-        console.log("Tokens loaded:", {
-            access_token: tokens.access_token ? "[REDACTED]" : "null",
-            expires_at: tokens.expires_at,
-        });
-    } catch (error) {
-        console.error("Error loading tokens from PostgreSQL: ", error.message);
-        await saveTokens();
-    }
+function readItems() {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return [];
+    const data = fs.readFileSync(DATA_FILE, "utf-8");
+    return data.trim() === "" ? [] : JSON.parse(data);
+  } catch (err) {
+    console.error("Error leyendo items.json:", err.message);
+    return [];
+  }
 }
 
-async function saveTokens() {
-    try {
-        await pool.query(
-            `INSERT INTO tokens (id, access_token, refresh_token, expires_at)
-            VALUES (1, $1, $2, $3)
-            ON CONFLICT (id)
-            DO UPDATE SET
-            access_token = EXCLUDED.access_token,
-            refresh_token = EXCLUDED.refresh_token,
-            expires_at = EXCLUDED.expires_at`,
-            [tokens.access_token, tokens.refresh_token, tokens.expires_at]
-        );
-        console.log("Tokens saved to PostgreSQL");
-    } catch (error) {
-        console.error("Error saving tokens to PostgreSQL: ", error.message);
-    }
+function writeItems(items) {
+  try {
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(items, null, 2));
+    console.log(`\nGuardados ${items.length} productos en data/items.json\n`);
+  } catch (err) {
+    console.error("Error guardando items.json:", err.message);
+  }
 }
 
 async function refreshAccessToken() {
-    if (!CLIENT_ID || !CLIENT_SECRET || !tokens.refresh_token) {
-        throw new Error("Missing CLIENT_ID, CLIENT_SECRET or REFRESH_TOKEN");
-    }
-    try {
-        const response = await axios.post(
-            "https://api.mercadolibre.com/oauth/token",
-            {
-                grant_type: "refresh_token",
-                client_id: CLIENT_ID,
-                client_secret: CLIENT_SECRET,
-                refresh_token: tokens.refresh_token,
-            },
-            {
-                headers: {
-                    accept: "application/json",
-                    "content-type": "application/x-www-form-urlencoded",
-                },
-            }
-        );
+  if (!CLIENT_ID || !CLIENT_SECRET || !tokens.refresh_token) {
+    throw new Error("Faltan credenciales o refresh token");
+  }
 
-        const { access_token, refresh_token, expires_in } = response.data;
-        tokens = {
-            access_token,
-            refresh_token,
-            expires_at: Date.now() + expires_in * 1000,
-        };
-        await saveTokens();
-        console.log("Access Token refreshed successfully");
-        return access_token;
-    } catch (error) {
-        console.error("Token refresh error: ", error.response?.data || error.message);
-        throw new Error(`Failed to refresh access token: ${error.response?.data?.message || error.message}`);
-    }
+  const response = await axios.post(
+    "https://api.mercadolibre.com/oauth/token",
+    new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: tokens.refresh_token,
+    }),
+    { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+  );
+
+  tokens = {
+    access_token: response.data.access_token,
+    refresh_token: response.data.refresh_token || tokens.refresh_token,
+    expires_at: Date.now() + response.data.expires_in * 1000,
+  };
+
+  console.log("Token refrescado correctamente");
+  return tokens.access_token;
 }
 
 async function ensureValidToken(req, res, next) {
-    try {
-        await loadTokens();
-        if (!tokens.access_token || Date.now() >= tokens.expires_at - 60000) {
-            tokens.access_token = await refreshAccessToken();
-        }
-        req.accessToken = tokens.access_token;
-        console.log("Token validated for request: ", {
-            access_token: tokens.access_token ? "[REDACTED]" : "null",
-        });
-        next();
-    } catch (error) {
-        console.error("Authentication middleware error: ", error.message);
-        res.status(500).json({ error: "Authentication error", details: error.message });
+  try {
+    if (!tokens.access_token || Date.now() >= tokens.expires_at - 60000) {
+      await refreshAccessToken();
     }
+    req.accessToken = tokens.access_token;
+    next();
+  } catch (err) {
+    console.error("Error de autenticación:", err.message);
+    res.status(500).json({ error: "Error de autenticación", details: err.message });
+  }
 }
 
 app.use("/api/ml", ensureValidToken);
 
-async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false) {
+// Endpoint normal: leer del JSON
+app.get("/api/ml/items", (req, res) => {
+  const items = readItems();
+  res.json({
+    success: true,
+    total: items.length,
+    items,
+  });
+});
 
+const categoryCache = new Map();
+
+async function getCategoryName(categoryId, accessToken) {
+  if (!categoryId) return "Sin categoría";
+  if (categoryCache.has(categoryId)) {
+    return categoryCache.get(categoryId);
+  }
+
+  try {
+    const res = await axios.get(
+      `https://api.mercadolibre.com/categories/${categoryId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const name = res.data.path_from_root
+      .map(c => c.name)
+      .join(" > ") || res.data.name;
+
+    categoryCache.set(categoryId, name);
+    return name;
+  } catch (err) {
+    categoryCache.set(categoryId, "Categoría no encontrada");
+    return "Categoría no encontrada";
+  }
+}
+
+// === FUNCIÓN PRINCIPAL CON PROGRESO EN VIVO ===
+async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false) {
+    console.log("\nIniciando TEST con nombre de categoría real y descripción...\n");
+  
     const allItemIds = [];
     let scrollId = null;
     let keepScrolling = true;
-
+    let page = 1;
+  
+    // Paso 1: Scroll para obtener todos los IDs
     while (keepScrolling && allItemIds.length < maxItems) {
-
-        let url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan`;
-        if (scrollId) {
-            url += `&scroll_id=${encodeURIComponent(scrollId)}`;
-        }
-
-        let response;
-        try {
-            response = await axios.get(url, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
-        } catch (error) {
-            console.error("Search API error: ", error.response?.data || error.message);
-            throw new Error(`Failed to fetch item IDs: ${error.response?.data?.message || error.message}`);
-        }
-
-        const itemIds = response.data.results || [];
-        allItemIds.push(...itemIds.slice(0, maxItems - allItemIds.length));
-
-        if (itemIds.length === 0 || !response.data.scroll_id || allItemIds.length >= maxItems) {
-            keepScrolling = false;
-        } else {
-            scrollId = response.data.scroll_id;
-        }
+      const url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan${scrollId ? `&scroll_id=${encodeURIComponent(scrollId)}` : ""}`;
+  
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+  
+      const newIds = res.data.results || [];
+      allItemIds.push(...newIds);
+  
+      console.log(`Página ${page} → +${newIds.length} IDs (total: ${allItemIds.length})`);
+  
+      if (!res.data.scroll_id || newIds.length === 0 || allItemIds.length >= maxItems) {  // ← AQUÍ ESTABA EL ERROR
+        keepScrolling = false;
+      } else {
+        scrollId = res.data.scroll_id;
+        page++;
+      }
+  
+      await new Promise(r => setTimeout(r, 200));
     }
-
+  
     const uniqueItemIds = [...new Set(allItemIds)];
-    console.log(`Fetched ${uniqueItemIds.length} unique item IDs`);
-
-    if (uniqueItemIds.length === 0) {
-        console.warn("No item IDs fetched from MercadoLibre API");
-        return [];
-    }
-    
+    console.log(`\nTotal IDs únicos obtenidos: ${uniqueItemIds.length}\n`);
+  
+    if (uniqueItemIds.length === 0) return [];
+  
     const detailedItems = [];
+    let processed = 0;
+  
     for (let i = 0; i < uniqueItemIds.length; i += 20) {
-
-        const batchIds = uniqueItemIds.slice(i, i + 20);
-        const idsString = batchIds.join(",");
-
-        let response;
-        try {
-            response = await axios.get(
-                `https://api.mercadolibre.com/items?ids=${idsString}`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`
-                    },
-                }
+      const batch = uniqueItemIds.slice(i, i + 20);
+      const ids = batch.join(",");
+  
+      try {
+        const res = await axios.get(`https://api.mercadolibre.com/items?ids=${ids}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+  
+        const candidates = res.data.filter(item => debug || (item.body?.available_quantity > 0));
+  
+        for (const item of candidates) {
+          const b = item.body;
+  
+          // Descripción
+          let description = "";
+          try {
+            const descRes = await axios.get(
+              `https://api.mercadolibre.com/items/${b.id}/description`,
+              { headers: { Authorization: `Bearer ${accessToken}` } }
             );
-        } catch (error) {
-            console.error("Items API error: ", error.response?.data || error.message);
-            throw new Error(`Failed to fetch item dedtails: ${error.response?.data?.message | error.message}`);
+            description = (descRes.data.plain_text || descRes.data.text || "").trim();
+          } catch (err) {
+            description = "";
+          }
+  
+          // Categoría real
+          const categoryName = await getCategoryName(b.category_id, accessToken);
+  
+          const pictures = Array.isArray(b.pictures)
+            ? b.pictures.map(p => p.url).filter(u => u?.startsWith("http"))
+            : [];
+  
+          detailedItems.push({
+            id: b.id,
+            title: b.title,
+            category_id: b.category_id,
+            category: categoryName,        // ← Nombre real de la categoría
+            price: b.price,
+            available_quantity: b.available_quantity,
+            condition: b.condition,
+            pictures,
+            thumbnail: b.thumbnail || "",
+            status: b.status,
+            description
+          });
         }
-
-        const batchItems = response.data
-            .filter(
-                (item) => debug || (item.body?.available_quantity > 0 && item.body?.status === "active")
-            )
-            .map((item) => ({
-                id: item.body.id,
-                title: item.body.title,
-                price: item.body.price,
-                available_quantity: item.body.available_quantity,
-                condition: item.body.condition,
-                pictures: item.body.pictures.map((pic) => pic.url) || [],
-                thumbnail: item.body.thumbnail,
-                status: item.body.status,
-            }));
-
-            detailedItems.push(...batchItems);
-            console.log(`Processed ${detailedItems.length} items of ${uniqueItemIds.length}`);
+  
+        processed += batch.length;
+        process.stdout.write(
+          `\rDescargando + categoría + descripción: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`
+        );
+  
+        await new Promise(r => setTimeout(r, 350));
+  
+      } catch (err) {
+        console.log(`\nError en lote:`, err.response?.data?.message || err.message);
+      }
     }
-
-    if (detailedItems.length === 0) {
-        console.warn("No valid items found after filtering", {
-            debug_mode: debug,
-            filter: debug ? "none" : "available_quantity > 0 and status = active",
-        });
-        return [];
-    }
-
-    const client = await pool.connect();
-    try {
-        console.log(`Saving ${detailedItems.length} items to PostgreSQL`);
-        await client.query("TRUNCATE TABLE items");
-
-        const batchSize = 100;
-        for (let i = 0; i < detailedItems.length; i += batchSize) {
-
-            const batch = detailedItems.slice(i, i + batchSize);
-            const values = batch.map(item => [
-                item.id,
-                item.title,
-                item.price,
-                item.available_quantity,
-                item.condition,
-                JSON.stringify(item.pictures),
-                item.thumbnail,
-                item.status
-            ]);
-
-            if (values.length > 0) {
-                await client.query("BEGIN");
-                try {
-                    const placeholders = values.map((_, j) => `($${j * 8 + 1}, $${j * 8 + 2}, $${j * 8 + 3}, $${j * 8 + 4}, $${j * 8 + 5}, $${j * 8 + 6}, $${j * 8 + 7}, $${j * 8 + 8})`).join(", ");
-                    await client.query(
-                        `INSERT INTO items (id, title, price, available_quantity, condition, pictures, thumbnail, status)
-                        VALUES ${placeholders}
-                        ON CONFLICT (id) DO UPDATE SET
-                        title = EXCLUDED.title,
-                        price = EXCLUDED.price,
-                        available_quantity = EXCLUDED.available_quantity,
-                        condition = EXCLUDED.condition,
-                        pictures = EXCLUDED.pictures,
-                        thumbnail = EXCLUDED.thumbnail,
-                        status = EXCLUDED.status`,
-                        values.flat()
-                    );
-                    await client.query("COMMIT"); // Commit batch
-                    console.log(`Inserted batch ${i / batchSize + 1} with ${values.length} items`);
-                } catch (dbError) {
-                    await client.query("ROLLBACK"); // Rollback batch on error
-                    throw dbError;
-                }
-            }
-        }
-            } catch (dbError) {
-                console.error("PostgreSQL error:", dbError.message);
-                throw new Error(`Failed to save items to PostgreSQL: ${dbError.message}`);
-            } finally {
-                client.release();
-            }
-
+  
+    console.log(`\n\nTEST COMPLETADO → ${detailedItems.length} productos con categoría real y descripción`);
     return detailedItems;
-}
+  }
 
-app.get("/api/ml/items-details", async (req, res) => {
-    try {
-        const detailedItems = await fetchAndSaveItems(req.accessToken);
-        if (detailedItems.length === 0) {
-            return res.status(200).json({
-                success: true,
-                total: 0,
-                items: [],
-                message: "No items found"
-            });
-        }
-        res.json({
-            success: true,
-            total: detailedItems.length,
-            items: detailedItems
-        });
-    } catch (error) {
-        console.error("Error obtaining items: ", error.message);
-        res.status(500).json({ error: "Error obtaining items", details: error.message });
+  async function fetchAndSaveItemsTest(accessToken, maxItems = 500, debug = false) {
+    console.log("\nIniciando TEST con nombre de categoría real y descripción...\n");
+  
+    const allItemIds = [];
+    let scrollId = null;
+    let keepScrolling = true;
+    let page = 1;
+  
+    // Paso 1: Scroll para obtener todos los IDs
+    while (keepScrolling && allItemIds.length < maxItems) {
+      const url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan${scrollId ? `&scroll_id=${encodeURIComponent(scrollId)}` : ""}`;
+  
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+  
+      const newIds = res.data.results || [];
+      allItemIds.push(...newIds);
+  
+      console.log(`Página ${page} → +${newIds.length} IDs (total: ${allItemIds.length})`);
+  
+      if (!res.data.scroll_id || newIds.length === 0 || allItemIds.length >= maxItems) {  // ← AQUÍ ESTABA EL ERROR
+        keepScrolling = false;
+      } else {
+        scrollId = res.data.scroll_id;
+        page++;
+      }
+  
+      await new Promise(r => setTimeout(r, 200));
     }
+  
+    const uniqueItemIds = [...new Set(allItemIds)];
+    console.log(`\nTotal IDs únicos obtenidos: ${uniqueItemIds.length}\n`);
+  
+    if (uniqueItemIds.length === 0) return [];
+  
+    const detailedItems = [];
+    let processed = 0;
+  
+    for (let i = 0; i < uniqueItemIds.length; i += 20) {
+      const batch = uniqueItemIds.slice(i, i + 20);
+      const ids = batch.join(",");
+  
+      try {
+        const res = await axios.get(`https://api.mercadolibre.com/items?ids=${ids}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+  
+        const candidates = res.data.filter(item => debug || (item.body?.available_quantity > 0));
+  
+        for (const item of candidates) {
+          const b = item.body;
+  
+          // Descripción
+          let description = "";
+          try {
+            const descRes = await axios.get(
+              `https://api.mercadolibre.com/items/${b.id}/description`,
+              { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            description = (descRes.data.plain_text || descRes.data.text || "").trim();
+          } catch (err) {
+            description = "";
+          }
+  
+          // Categoría real
+          const categoryName = await getCategoryName(b.category_id, accessToken);
+  
+          const pictures = Array.isArray(b.pictures)
+            ? b.pictures.map(p => p.url).filter(u => u?.startsWith("http"))
+            : [];
+  
+          detailedItems.push({
+            id: b.id,
+            title: b.title,
+            category_id: b.category_id,
+            category: categoryName,        // ← Nombre real de la categoría
+            price: b.price,
+            available_quantity: b.available_quantity,
+            condition: b.condition,
+            pictures,
+            thumbnail: b.thumbnail || "",
+            status: b.status,
+            description
+          });
+        }
+  
+        processed += batch.length;
+        process.stdout.write(
+          `\rDescargando + categoría + descripción: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`
+        );
+  
+        await new Promise(r => setTimeout(r, 350));
+  
+      } catch (err) {
+        console.log(`\nError en lote:`, err.response?.data?.message || err.message);
+      }
+    }
+  
+    console.log(`\n\nTEST COMPLETADO → ${detailedItems.length} productos con categoría real y descripción`);
+    return detailedItems;
+  }
+
+// Endpoints que actualizan el JSON
+app.get("/api/ml/items-details", async (req, res) => {
+  try {
+    const debug = req.query.debug === "true";
+    const items = await fetchAndSaveItems(req.accessToken, Infinity, debug);
+    writeItems(items);
+    res.json({ success: true, total: items.length, message: "Datos actualizados" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get("/api/ml/items-details-test", async (req, res) => {
     try {
-        const detailedItems = await fetchAndSaveItems(req.accessToken, 5000, debug);
-        if (detailedItems.length === 0) {
-            return res.status(200).json({
-                success: true,
-                total: 0,
-                items: [],
-                message: `No valid items found${debug ? "" : " with available quantity and active status"}`,
-                debug: debug,
-            });
-        }
-            res.json({
-            success: true,
-            total: detailedItems.length,
-            items: detailedItems,
-            debug: debug,
-        });
-    } catch (error) {
-        console.error("Error al obtener los detalles (test): ", error.message);
-        res.status(500).json({ error: "Error al obtener los detalles de los items (test)", details: error.message });
+      const debug = req.query.debug === "true";
+      console.log("\nIniciando TEST (máx 5000 productos)...");
+      console.log("Los resultados se guardarán en data/test-items.json (NO toca items.json)\n");
+  
+      const items = await fetchAndSaveItemsTest(req.accessToken, 500, debug);
+  
+      // GUARDAR EN ARCHIVO APARTE
+      const testFile = path.join(__dirname, "data", "test-items.json");
+      fs.mkdirSync(path.dirname(testFile), { recursive: true });
+      fs.writeFileSync(testFile, JSON.stringify(items, null, 2));
+  
+      console.log(`\nTEST COMPLETADO → ${items.length} productos guardados en:`);
+      console.log(`   ${testFile}\n`);
+  
+      res.json({
+        success: true,
+        message: "Test completado",
+        count: items.length,
+        file: "data/test-items.json",
+        tip: "Tu items.json principal NO fue modificado"
+      });
+  
+    } catch (err) {
+      console.error("\nError en test:", err.message);
+      res.status(500).json({ error: err.message });
     }
-});
+  });
 
-app.get("/api/ml/items", async (req, res) => {
-    try {
-        const { rows } = await pool.query("SELECT * FROM items");
-        const items = rows.map((row) => {
-            let pictures = [];
-            try {
-                pictures = JSON.parse(row.pictures);
-                if (!Array.isArray(pictures)) {
-                    console.warn(`Invalid pictures format for item ${row.id}: `, row.pictures);
-                    pictures = [];
-                }
-            } catch (error) {
-                console.warn(`Failed to parse pictures for item ${row.id}`, row.pictures, error.message);
-                pictures = [];
-            }
-            return {
-                ...row,
-                pictures,
-            };
-        });
-        res.json({
-            success: true,
-            total: items.length,
-            items,
-        });
-    } catch (error) {
-        console.error("Error fetching items from database: ", error.message);
-        res.status(500).json({ error: "Error fetching items from database ", details: error.message });
-    }
-});
-
+// Inicio
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
-    try {
-        await pool.query(
-            `CREATE TABLE IF NOT EXISTS tokens (
-                id INTEGER PRIMARY KEY,
-                access_token TEXT NOT NULL,
-                refresh_token TEXT NOT NULL,
-                expires_at BIGINT NOT NULL
-            )`
-        );
-        await loadTokens();
-    } catch (error) {
-        console.error("Error initializing tokens table: ", error.message);
-    }
+app.listen(PORT, () => {
+  console.log(`\nServidor LOCAL corriendo en http://localhost:${PORT}`);
+  console.log(`Productos guardados en: ${DATA_FILE}\n`);
+  console.log("Endpoints:");
+  console.log("  → GET  http://localhost:5000/api/ml/items");
+  console.log("  → GET  http://localhost:5000/api/ml/items-details-test?debug=true  (para actualizar)\n");
 });
