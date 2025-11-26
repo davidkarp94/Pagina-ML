@@ -4,6 +4,7 @@ const axios = require("axios");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
+const XLSX = require("xlsx");
 
 const app = express();
 app.use(cors());
@@ -431,6 +432,202 @@ app.get("/api/ml/items-details-test", async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+  //ENDPOINT: devuelve el body completo de un solo item
+app.get("/api/ml/item-body/:id", async (req, res) => {
+  const itemId = req.params.id.trim();
+
+  if (!itemId || !itemId.startsWith("MLA")) {
+    return res.status(400).json({ error: "ID inválido. Ejemplo: MLA875848733" });
+  }
+
+  try {
+    console.log(`Consultando item completo: ${itemId}`);
+
+    const response = await axios.get(`https://api.mercadolibre.com/items/${itemId}`, {
+      headers: { Authorization: `Bearer ${req.accessToken}` },
+    });
+
+    res.json({
+      success: true,
+      item_id: itemId,
+      body: response.data
+    });
+
+  } catch (err) {
+    console.error(`Error consultando ${itemId}:`, err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: "No se pudo obtener el item",
+      details: err.response?.data || err.message
+    });
+  }
+});
+
+app.get("/api/ml/group-by-category", async (req, res) => {
+  try {
+    console.log("\nIniciando agrupación de productos under_review por categoría...\n");
+
+    const inputFile = path.join(__dirname, "data", "items-with-categories.json");
+    if (!fs.existsSync(inputFile)) {
+      return res.status(404).json({ error: "No existe items-with-categories.json" });
+    }
+
+    const rawData = fs.readFileSync(inputFile, "utf-8");
+    const items = JSON.parse(rawData);
+
+    // Filtrar solo under_review
+    const underReviewItems = items.filter(item => item.status === "under_review");
+
+    if (underReviewItems.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: "No hay productos con status 'under_review'" 
+      });
+    }
+
+    console.log(`Encontrados ${underReviewItems.length} productos under_review`);
+
+    // Agrupar por categoría
+    const grouped = {};
+    underReviewItems.forEach(item => {
+      const cat = item.category || "Sin categoría";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(item);
+    });
+
+    // Crear carpeta destino
+    const outputDir = path.join(__dirname, "data", "items-categories");
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    let created = 0;
+    let singles = []; // Aquí van los items con categoría de 1 solo
+
+    for (const [categoryName, categoryItems] of Object.entries(grouped)) {
+      if (categoryItems.length === 1) {
+        // Es categoría con un solo ítem → lo mandamos al archivo agrupado
+        singles.push(...categoryItems);
+      } else {
+        // Categoría con 2 o más → archivo individual
+        const safeName = categoryName
+          .replace(/[<>:"|?*\\\/]/g, "")
+          .replace(/\s*>\s*/g, " - ")
+          .replace(/\s+/g, "_")
+          .substring(0, 100);
+
+        const fileName = path.join(outputDir, `${safeName}.json`);
+        fs.writeFileSync(fileName, JSON.stringify(categoryItems, null, 2));
+        created++;
+        console.log(`→ ${categoryItems.length} ítems → ${safeName}.json`);
+      }
+    }
+
+    // Guardar todos los singles en un solo archivo
+    if (singles.length > 0) {
+      const singleFile = path.join(outputDir, "single-category.json");
+      fs.writeFileSync(singleFile, JSON.stringify(singles, null, 2));
+      created++;
+      console.log(`→ ${singles.length} ítems con categoría única → single-category.json`);
+    }
+
+    console.log(`\n¡Listo! ${created} archivos creados en data/items-categories/\n`);
+
+    res.json({
+      success: true,
+      message: "Productos under_review agrupados por categoría",
+      total_items: underReviewItems.length,
+      categories_created: created,
+      single_category_items: singles.length,
+      output_folder: "data/items-categories/"
+    });
+
+  } catch (err) {
+    console.error("Error agrupando por categoría:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+app.get("/api/ml/generate-excel-file", async (req, res) => {
+  const jsonPath = path.join(__dirname, "data", "items-categories", "Agro_Repuestos_Maquinaria_Agrícola_Motor_Bombas_Bombas_de_Aceite.json");
+  if (!fs.existsSync(jsonPath)) {
+    return res.status(404).json({ error: "No existe json" });
+  }
+
+  const templatePath = path.join(__dirname, "data", "templates", "template_masivo_mercadolibre.xlsx");
+  if (!fs.existsSync(templatePath)) {
+    return res.status(500).send("Falta el template oficial en data/templates/template_masivo_mercadolibre.xlsx");
+  }
+
+  try {
+    const items = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+
+    const workbook = XLSX.readFile(templatePath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    // Limpiar filas manteniendo formato
+    const range = XLSX.utils.decode_range(worksheet["!ref"]);
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+        delete worksheet[cellAddress];
+      }
+    }
+
+    const rows = items.map(item => {
+      const pics = item.pictures || [];
+      return {
+        title: item.title,
+        price: item.price,
+        available_quantity: item.available_quantity,
+        condition: item.condition === "new" ? "new" : "used",
+        listing_type_id: "gold_special",
+        buying_mode: "buy_it_now",
+        currency_id: "ARS",
+        picture_1: pics[0] || "",
+        picture_2: pics[1] || "",
+        picture_3: pics[2] || "",
+        picture_4: pics[3] || "",
+        picture_5: pics[4] || "",
+        picture_6: pics[5] || "",
+        picture_7: pics[6] || "",
+        picture_8: pics[7] || "",
+        picture_9: pics[8] || "",
+        picture_10: pics[9] || "",
+        picture_11: pics[10] || "",
+        picture_12: pics[11] || "",
+        description: item.description || "",
+        warranty: "Garantía del vendedor: 3 meses",
+        category_id: item.category_id,
+      };
+    });
+
+    XLSX.utils.sheet_add_json(worksheet, rows, {
+      skipHeader: true,
+      origin: "A2"
+    });
+
+    const fileNameOnly = path.basename(jsonPath, ".json"); // solo el nombre
+    const output = path.join(__dirname, "data", "excel-ready", `carga_${fileNameOnly}.xlsx`);
+    fs.mkdirSync(path.dirname(output), { recursive: true });
+    XLSX.writeFile(workbook, output);
+
+    res.download(output, `carga_${fileNameOnly}.xlsx`, err => {
+      if (err) console.error("Error enviando Excel:", err);
+    });
+
+  } catch (err) {
+    console.error("Error generando Excel:", err);
+    res.status(500).send("Error interno del servidor");
+  }
+});
+
+const categoryRoutes = require("./routes/categoryRoutes");
+// Pasar el token a las rutas de categorías
+app.use("/api/ml/category", (req, res, next) => {
+  categoryRoutes.setAccessToken(req.accessToken);
+  next();
+}, categoryRoutes);
 
 // Inicio
 const PORT = process.env.PORT || 5000;
