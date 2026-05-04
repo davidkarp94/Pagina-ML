@@ -396,7 +396,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
     return detailedItems;
   }
 
-// Endpoints que actualizan el JSON
+// Usar para obtener todos los items de la cuenta
 app.get("/api/ml/items-details", async (req, res) => {
   try {
     const debug = req.query.debug === "true";
