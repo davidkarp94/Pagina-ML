@@ -1,0 +1,37 @@
+[
+  {
+    "id": "MLA896279943",
+    "title": "Manija Tirador Dos Mar Mod-reg Cromado 5,3 Cm Diámetro",
+    "category": "Hogar, Muebles y Jardín > Muebles para el Hogar > Accesorios y Repuestos > Tiradores",
+    "price": 7709.03,
+    "available_quantity": 2,
+    "condition": "new",
+    "pictures": [
+      "http://http2.mlstatic.com/D_923060-MLA80402202289_112024-O.jpg",
+      "http://http2.mlstatic.com/D_968810-MLA44022215164_112020-O.jpg"
+    ],
+    "thumbnail": "http://http2.mlstatic.com/D_923060-MLA80402202289_112024-I.jpg",
+    "status": "under_review",
+    "description": "Sin descripción disponible",
+    "date_created": "2020-11-08T15:31:49.000Z",
+    "category_id": "MLA378163"
+  },
+  {
+    "id": "MLA896283051",
+    "title": "Manija Tirador Dos Mar Mod Oval Cromada 5,6 X 4,8 Cm",
+    "category": "Hogar, Muebles y Jardín > Muebles para el Hogar > Accesorios y Repuestos > Tiradores",
+    "price": 7709.03,
+    "available_quantity": 3,
+    "condition": "new",
+    "pictures": [
+      "http://http2.mlstatic.com/D_668459-MLA80402665601_112024-O.jpg",
+      "http://http2.mlstatic.com/D_844569-MLA44022230892_112020-O.jpg",
+      "http://http2.mlstatic.com/D_619825-MLA44022234735_112020-O.jpg"
+    ],
+    "thumbnail": "http://http2.mlstatic.com/D_668459-MLA80402665601_112024-I.jpg",
+    "status": "under_review",
+    "description": "Sin descripción disponible",
+    "date_created": "2020-11-08T15:38:45.000Z",
+    "category_id": "MLA378163"
+  }
+]

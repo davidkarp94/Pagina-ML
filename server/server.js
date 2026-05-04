@@ -16,6 +16,11 @@ const USER_ID = process.env.USER_ID;
 
 const DATA_FILE = path.join(__dirname, "data", "items.json");
 
+const IDS_TO_REMOVE_FILE = path.join(__dirname, "data", "ids.txt");
+const GOOD_WITH_CATEGORIES = path.join(__dirname, "data", "items-good-with-categories.json");
+const FINAL_CLEAN_OUTPUT = path.join(__dirname, "data", "items-good-clean.json");
+const REMOVED_OUTPUT = path.join(__dirname, "data", "ids-eliminados.json");
+
 let tokens = {
   access_token: process.env.ACCESS_TOKEN || "",
   refresh_token: process.env.REFRESH_TOKEN || "",
@@ -467,7 +472,7 @@ app.get("/api/ml/group-by-category", async (req, res) => {
   try {
     console.log("\nIniciando agrupación de productos under_review por categoría...\n");
 
-    const inputFile = path.join(__dirname, "data", "items-with-categories.json");
+    const inputFile = path.join(__dirname, "data", "items-good-clean.json");
     if (!fs.existsSync(inputFile)) {
       return res.status(404).json({ error: "No existe items-with-categories.json" });
     }
@@ -621,6 +626,89 @@ app.get("/api/ml/generate-excel-file", async (req, res) => {
     res.status(500).send("Error interno del servidor");
   }
 });
+
+function removeByIdsList() {
+  // 1. Leer y parsear ids.txt
+  if (!fs.existsSync(IDS_TO_REMOVE_FILE)) {
+    throw new Error("No existe data/ids.txt");
+  }
+  if (!fs.existsSync(GOOD_WITH_CATEGORIES)) {
+    throw new Error("No existe items-good-with-categories.json");
+  }
+
+  const rawIds = fs.readFileSync(IDS_TO_REMOVE_FILE, "utf-8").trim();
+  let idsToRemove = [];
+
+  try {
+    // Intentar parsear como JSON array
+    const parsed = JSON.parse(rawIds);
+    if (Array.isArray(parsed)) {
+      idsToRemove = parsed.map(n => String(n).trim());
+    }
+  } catch (e) {
+    // Si no es JSON → asumir una ID por línea
+    idsToRemove = rawIds
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+      .map(n => n.replace(/[^0-9]/g, "")) // limpiar cualquier caracter raro
+      .filter(n => n.length > 5); // solo números largos
+  }
+
+  console.log(`\nCargados ${idsToRemove.length} IDs para eliminar desde ids.txt`);
+
+  // 2. Cargar items-good-with-categories.json
+  const items = JSON.parse(fs.readFileSync(GOOD_WITH_CATEGORIES, "utf-8"));
+  console.log(`${items.length} publicaciones cargadas desde items-good-with-categories.json`);
+
+  // 3. Separar: mantenidos y eliminados
+  const keptItems = [];
+  const removedItems = [];
+
+  for (const item of items) {
+    // Extraer el número final del ID (ej: MLA1884413740 → 1884413740)
+    const itemNumber = item.id.replace(/[^0-9]/g, "");
+
+    if (idsToRemove.includes(itemNumber)) {
+      removedItems.push(item);
+    } else {
+      keptItems.push(item);
+    }
+  }
+
+  // 4. Guardar resultados
+  fs.mkdirSync(path.dirname(FINAL_CLEAN_OUTPUT), { recursive: true });
+  fs.writeFileSync(FINAL_CLEAN_OUTPUT, JSON.stringify(keptItems, null, 2));
+  fs.writeFileSync(REMOVED_OUTPUT, JSON.stringify(removedItems, null, 2));
+
+  console.log(`\n¡LIMPIEZA COMPLETADA!`);
+  console.log(`→ Eliminados: ${removedItems.length} publicaciones`);
+  console.log(`→ Quedan: ${keptItems.length} publicaciones limpias`);
+
+  return { keptItems, removedItems };
+}
+
+app.get("/api/ml/remove-by-ids", (req, res) => {
+  try {
+    const { keptItems, removedItems } = removeByIdsList();
+
+    res.json({
+      success: true,
+      message: "Eliminación masiva completada",
+      removed_count: removedItems.length,
+      kept_count: keptItems.length,
+      files: {
+        final: "data/items-good-clean.json",
+        removed: "data/ids-eliminados.json"
+      },
+      tip: "Vamo carajo!"
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 const categoryRoutes = require("./routes/categoryRoutes");
 // Pasar el token a las rutas de categorías
