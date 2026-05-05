@@ -10,9 +10,40 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const USER_ID = process.env.USER_ID;
+const accounts = {
+  "1": {
+    client_id: process.env.ACCOUNT1_CLIENT_ID,
+    client_secret: process.env.ACCOUNT1_CLIENT_SECRET,
+    user_id: process.env.ACCOUNT1_USER_ID,
+    access_token: process.env.ACCOUNT1_ACCESS_TOKEN || "",
+    refresh_token: process.env.ACCOUNT1_REFRESH_TOKEN || "",
+  },
+  "2": {
+    client_id: process.env.ACCOUNT2_CLIENT_ID,
+    client_secret: process.env.ACCOUNT2_CLIENT_SECRET,
+    user_id: process.env.ACCOUNT2_USER_ID,
+    access_token: process.env.ACCOUNT2_ACCESS_TOKEN || "",
+    refresh_token: process.env.ACCOUNT2_REFRESH_TOKEN || "",
+  },
+}
+
+const tokenCaches = {
+  "1": {
+    access_token: accounts["1"].access_token,
+    refresh_token: accounts["1"].refresh_token,
+    expires_at: 0,
+  },
+  "2": {
+    access_token: accounts["2"].access_token,
+    refresh_token: accounts["2"].refresh_token,
+    expires_at: 0,
+  },
+}
+
+function getAccountConfig(accountId = "1") {
+  if (!accounts[accountId]) throw new Error(`Cuenta ${accountId} no configurada`);
+  return accounts[accountId];
+}
 
 const DATA_FILE = path.join(__dirname, "data", "items.json");
 
@@ -20,12 +51,6 @@ const IDS_TO_REMOVE_FILE = path.join(__dirname, "data", "ids.txt");
 const GOOD_WITH_CATEGORIES = path.join(__dirname, "data", "items-good-with-categories.json");
 const FINAL_CLEAN_OUTPUT = path.join(__dirname, "data", "items-good-clean.json");
 const REMOVED_OUTPUT = path.join(__dirname, "data", "ids-eliminados.json");
-
-let tokens = {
-  access_token: process.env.ACCESS_TOKEN || "",
-  refresh_token: process.env.REFRESH_TOKEN || "",
-  expires_at: 0,
-};
 
 function readItems() {
   try {
@@ -48,55 +73,76 @@ function writeItems(items) {
   }
 }
 
-async function refreshAccessToken() {
-  if (!CLIENT_ID || !CLIENT_SECRET || !tokens.refresh_token) {
-    throw new Error("Faltan credenciales o refresh token");
+async function refreshAccessToken(accountId) {
+  const config = getAccountConfig(accountId);
+  const cache = tokenCaches[accountId];
+
+  if (!config.client_id || !config.client_secret || !cache.refresh_token) {
+    throw new Error(`Faltan credenciales o refresh token para cuenta ${accountId}`);
   }
 
   const response = await axios.post(
     "https://api.mercadolibre.com/oauth/token",
     new URLSearchParams({
       grant_type: "refresh_token",
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: tokens.refresh_token,
+      client_id: config.client_id,
+      client_secret: config.client_secret,
+      refresh_token: cache.refresh_token
     }),
-    { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    { headers:
+        { "Content-Type": "application/x-www-form-urlencoded" }
+    }
   );
 
-  tokens = {
-    access_token: response.data.access_token,
-    refresh_token: response.data.refresh_token || tokens.refresh_token,
-    expires_at: Date.now() + response.data.expires_in * 1000,
-  };
+  cache.access_token = response.data.access_token;
+  cache.refresh_token = response.data.refresh_token || cache.refresh_token;
+  cache.expires_at = Date.now() + response.data.expires_in * 1000;
 
-  console.log("Token refrescado correctamente");
-  return tokens.access_token;
+  console.log(`Token refrescado correctamente - Cuenta ${accountId}`);
+  return cache.access_token;
 }
 
-async function ensureValidToken(req, res, next) {
+async function ensureValidToken(accountId) {
+  const cache = tokenCaches[accountId];
+  if (!cache.access_token || Date.now() >= cache.expires_at - 60000) {
+    await refreshAccessToken(accountId);
+  }
+  return cache.access_token;
+}
+
+// Elegir cuenta
+
+async function accountMiddleware (req, res, next) {
+  const accountId = req.query.account || "1";
   try {
-    if (!tokens.access_token || Date.now() >= tokens.expires_at - 60000) {
-      await refreshAccessToken();
-    }
-    req.accessToken = tokens.access_token;
+    req.accountId = accountId;
+    req.accessToken = await ensureValidToken(accountId);
+    req.userId = getAccountConfig(accountId).user_id;
     next();
   } catch (err) {
-    console.error("Error de autenticación:", err.message);
-    res.status(500).json({ error: "Error de autenticación", details: err.message });
+    console.error(`Error de autenticación en la cuenta ${accountId}:`, err.message);
+    res.status(500).json({ error: "Error de autenticación", account: accountId, details: err.message });
   }
 }
 
-app.use("/api/ml", ensureValidToken);
+app.use("/api/ml", accountMiddleware);
+
+const getDataFile = (accountId) => path.join(__dirname, "data", `items-account${accountId}.json`);
 
 // Endpoint normal: leer del JSON
 app.get("/api/ml/items", (req, res) => {
-  const items = readItems();
-  res.json({
-    success: true,
-    total: items.length,
-    items,
-  });
+  const file = getDataFile(req.accountId);
+  try {
+    const items = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf-8")) : [];
+    res.json({
+      success:true,
+      account: req.accountId,
+      total: items.length,
+      items
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
 });
 
 const categoryCache = new Map();
@@ -112,13 +158,12 @@ async function getCategoryName(categoryId, accessToken) {
       `https://api.mercadolibre.com/categories/${categoryId}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-    const name = res.data.path_from_root
-      .map(c => c.name)
+    const name = res.data.path_from_root?.map(c => c.name)
       .join(" > ") || res.data.name;
 
     categoryCache.set(categoryId, name);
     return name;
-  } catch (err) {
+  } catch {
     categoryCache.set(categoryId, "Categoría no encontrada");
     return "Categoría no encontrada";
   }
@@ -190,17 +235,17 @@ app.get("/api/ml/add-categories", async (req, res) => {
 });
 
 // === FUNCIÓN PRINCIPAL CON PROGRESO EN VIVO ===
-async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false) {
-    console.log("\nIniciando TEST con nombre de categoría real y descripción...\n");
+async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infinity) {
+    console.log(`\nIniciando descarga en cuenta ${accountId} \n`);
   
     const allItemIds = [];
     let scrollId = null;
     let keepScrolling = true;
     let page = 1;
   
-    // Paso 1: Scroll para obtener todos los IDs
+    // Scroll para obtener todos los IDs
     while (keepScrolling && allItemIds.length < maxItems) {
-      const url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan${scrollId ? `&scroll_id=${encodeURIComponent(scrollId)}` : ""}`;
+      const url = `https://api.mercadolibre.com/users/${userId}/items/search?search_type=scan${scrollId ? `&scroll_id=${encodeURIComponent(scrollId)}` : ""}`;
   
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -211,7 +256,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
   
       console.log(`Página ${page} → +${newIds.length} IDs (total: ${allItemIds.length})`);
   
-      if (!res.data.scroll_id || newIds.length === 0 || allItemIds.length >= maxItems) {  // ← AQUÍ ESTABA EL ERROR
+      if (!res.data.scroll_id || newIds.length === 0 || allItemIds.length >= maxItems) {
         keepScrolling = false;
       } else {
         scrollId = res.data.scroll_id;
@@ -238,7 +283,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
           headers: { Authorization: `Bearer ${accessToken}` },
         });
   
-        const candidates = res.data.filter(item => debug || (item.body?.available_quantity > 0));
+        const candidates = res.data.filter(item => item.body?.available_quantity > 0);
   
         for (const item of candidates) {
           const b = item.body;
@@ -279,7 +324,7 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
   
         processed += batch.length;
         process.stdout.write(
-          `\rDescargando + categoría + descripción: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`
+          `\rProcesando: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`
         );
   
         await new Promise(r => setTimeout(r, 350));
@@ -288,8 +333,12 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
         console.log(`\nError en lote:`, err.response?.data?.message || err.message);
       }
     }
+
+    const outputFile = getDataFile(accountId);
+    fs.mkdirSync(path.dirname(outputFile), { recursive: true });
+    fs.writeFileSync(outputFile, JSON.stringify(detailedItems, null, 2))
   
-    console.log(`\n\nTEST COMPLETADO → ${detailedItems.length} productos con categoría real y descripción`);
+    console.log(`\n\nTEST COMPLETADO → Cuenta: ${accountId},  ${detailedItems.length} productos guardados en ${outputFile}`);
     return detailedItems;
   }
 
@@ -399,12 +448,20 @@ async function fetchAndSaveItems(accessToken, maxItems = Infinity, debug = false
 // Usar para obtener todos los items de la cuenta
 app.get("/api/ml/items-details", async (req, res) => {
   try {
-    const debug = req.query.debug === "true";
-    const items = await fetchAndSaveItems(req.accessToken, Infinity, debug);
-    writeItems(items);
-    res.json({ success: true, total: items.length, message: "Datos actualizados" });
+    const items = await fetchAndSaveItems(
+      req.accessToken,
+      req.userId,
+      req.accountId,
+    );
+
+    res.json({
+      success: true,
+      account: req.accountId,
+      total: items.length,
+      message: `Datos actualizados correctamente - Cuenta ${req.accountId}`
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, account: req.accountId });
   }
 });
 
@@ -720,9 +777,8 @@ app.use("/api/ml/category", (req, res, next) => {
 // Inicio
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`\nServidor LOCAL corriendo en http://localhost:${PORT}`);
-  console.log(`Productos guardados en: ${DATA_FILE}\n`);
-  console.log("Endpoints:");
-  console.log("  → GET  http://localhost:5000/api/ml/items");
-  console.log("  → GET  http://localhost:5000/api/ml/items-details-test?debug=true  (para actualizar)\n");
+  console.log(`\nServidor corriendo en http://localhost:${PORT}`);
+  console.log("Uso:");
+  console.log("   → http://localhost:5000/api/ml/items-details?account=1");
+  console.log("   → http://localhost:5000/api/ml/items-details?account=2");
 });
