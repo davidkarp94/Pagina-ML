@@ -10,6 +10,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use(express.static(path.join(__dirname, "public")));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+})
+
 const accounts = {
   "1": {
     client_id: process.env.ACCOUNT1_CLIENT_ID,
@@ -127,7 +132,14 @@ async function accountMiddleware (req, res, next) {
 
 app.use("/api/ml", accountMiddleware);
 
-const getDataFile = (accountId) => path.join(__dirname, "data", `items-account${accountId}.json`);
+// Guardar Archivo en Cliente
+const getDataFile = (accountId) => {
+  const clientDataPath = path.join(__dirname, "..", "client", "data", `items-account${accountId}.json`);
+
+  fs.mkdirSync(path.dirname(clientDataPath), { recursive: true });
+
+  return clientDataPath;
+};
 
 // Endpoint normal: leer del JSON
 app.get("/api/ml/items", (req, res) => {
@@ -235,8 +247,23 @@ app.get("/api/ml/add-categories", async (req, res) => {
 });
 
 // === FUNCIÓN PRINCIPAL CON PROGRESO EN VIVO ===
-async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infinity) {
+async function fetchAndSaveItems(accessToken, userId, accountId, res) {
+  
+    const startTime = Date.now();
     console.log(`\nIniciando descarga en cuenta ${accountId} \n`);
+
+    const sendProgress = (progress, message, validCount =0) => {
+      if (res) {
+        res.write(`data: ${JSON.stringify({
+          progress: Math.round(progress),
+          message: message,
+          validCount: validCount,
+          elapsed: Math.floor((Date.now() - startTime) / 1000)
+        })}\n\n`);
+      }
+    };
+
+    try {
   
     const allItemIds = [];
     let scrollId = null;
@@ -244,22 +271,24 @@ async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infi
     let page = 1;
   
     // Scroll para obtener todos los IDs
-    while (keepScrolling && allItemIds.length < maxItems) {
+    while (keepScrolling) {
       const url = `https://api.mercadolibre.com/users/${userId}/items/search?search_type=scan${scrollId ? `&scroll_id=${encodeURIComponent(scrollId)}` : ""}`;
   
-      const res = await axios.get(url, {
+      const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
   
-      const newIds = res.data.results || [];
+      const newIds = response.data.results || [];
       allItemIds.push(...newIds);
-  
+
       console.log(`Página ${page} → +${newIds.length} IDs (total: ${allItemIds.length})`);
   
-      if (!res.data.scroll_id || newIds.length === 0 || allItemIds.length >= maxItems) {
+      sendProgress(0, `Obteniendo publicaciones... Página ${page} (${allItemIds.length} encontradas)`);
+  
+      if (!response.data.scroll_id || newIds.length === 0) {
         keepScrolling = false;
       } else {
-        scrollId = res.data.scroll_id;
+        scrollId = response.data.scroll_id;
         page++;
       }
   
@@ -267,28 +296,33 @@ async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infi
     }
   
     const uniqueItemIds = [...new Set(allItemIds)];
-    console.log(`\nTotal IDs únicos obtenidos: ${uniqueItemIds.length}\n`);
+    const totalIds = uniqueItemIds.length;
+
+    sendProgress(0, `Total publicaciones obtenidas: ${totalIds}. Iniciando descarga.`);
   
-    if (uniqueItemIds.length === 0) return [];
+    if (totalIds === 0) {
+      sendProgress(100, "No se encontraron publicaciones", 0);
+      return[];
+    }
   
     const detailedItems = [];
     let processed = 0;
   
-    for (let i = 0; i < uniqueItemIds.length; i += 20) {
+    for (let i = 0; i < totalIds; i += 20) {
       const batch = uniqueItemIds.slice(i, i + 20);
       const ids = batch.join(",");
   
       try {
-        const res = await axios.get(`https://api.mercadolibre.com/items?ids=${ids}`, {
+        const resBatch = await axios.get(`https://api.mercadolibre.com/items?ids=${ids}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
   
-        const candidates = res.data.filter(item => item.body?.available_quantity > 0);
+        const candidates = resBatch.data.filter(item => item.body?.available_quantity > 0);
   
         for (const item of candidates) {
           const b = item.body;
   
-          // Descripción
+          //Descripcion
           let description = "";
           try {
             const descRes = await axios.get(
@@ -300,9 +334,10 @@ async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infi
             description = "";
           }
   
-          // Categoría real
+          //Categoria real
           const categoryName = await getCategoryName(b.category_id, accessToken);
   
+          //Imagenes
           const pictures = Array.isArray(b.pictures)
             ? b.pictures.map(p => p.url).filter(u => u?.startsWith("http"))
             : [];
@@ -324,13 +359,20 @@ async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infi
   
         processed += batch.length;
         process.stdout.write(
-          `\rProcesando: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`
+          `\rProcesando: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`);
+        
+        const progress = Math.round((processed / totalIds) * 100);
+
+        sendProgress (
+          progress,
+          `Procesando: ${processed}/${totalIds} => ${detailedItems.length} válidas (${progress}%)`,
+          detailedItems.length
         );
   
         await new Promise(r => setTimeout(r, 350));
   
       } catch (err) {
-        console.log(`\nError en lote:`, err.response?.data?.message || err.message);
+        console.log(`\nError en lote: `, err.message);
       }
     }
 
@@ -338,130 +380,38 @@ async function fetchAndSaveItems(accessToken, userId, accountId, maxItems = Infi
     fs.mkdirSync(path.dirname(outputFile), { recursive: true });
     fs.writeFileSync(outputFile, JSON.stringify(detailedItems, null, 2))
   
-    console.log(`\n\nTEST COMPLETADO → Cuenta: ${accountId},  ${detailedItems.length} productos guardados en ${outputFile}`);
-    return detailedItems;
-  }
+    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
 
-  async function fetchAndSaveItemsTest(accessToken, maxItems = 500, debug = false) {
-    console.log("\nIniciando TEST con nombre de categoría real y descripción...\n");
-  
-    const allItemIds = [];
-    let scrollId = null;
-    let keepScrolling = true;
-    let page = 1;
-  
-    // Paso 1: Scroll para obtener todos los IDs
-    while (keepScrolling && allItemIds.length < maxItems) {
-      const url = `https://api.mercadolibre.com/users/${USER_ID}/items/search?search_type=scan${scrollId ? `&scroll_id=${encodeURIComponent(scrollId)}` : ""}`;
-  
-      const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-  
-      const newIds = res.data.results || [];
-      allItemIds.push(...newIds);
-  
-      console.log(`Página ${page} → +${newIds.length} IDs (total: ${allItemIds.length})`);
-  
-      if (!res.data.scroll_id || newIds.length === 0 || allItemIds.length >= maxItems) {  // ← AQUÍ ESTABA EL ERROR
-        keepScrolling = false;
-      } else {
-        scrollId = res.data.scroll_id;
-        page++;
-      }
-  
-      await new Promise(r => setTimeout(r, 200));
-    }
-  
-    const uniqueItemIds = [...new Set(allItemIds)];
-    console.log(`\nTotal IDs únicos obtenidos: ${uniqueItemIds.length}\n`);
-  
-    if (uniqueItemIds.length === 0) return [];
-  
-    const detailedItems = [];
-    let processed = 0;
-  
-    for (let i = 0; i < uniqueItemIds.length; i += 20) {
-      const batch = uniqueItemIds.slice(i, i + 20);
-      const ids = batch.join(",");
-  
-      try {
-        const res = await axios.get(`https://api.mercadolibre.com/items?ids=${ids}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-  
-        const candidates = res.data.filter(item => debug || (item.body?.available_quantity > 0));
-  
-        for (const item of candidates) {
-          const b = item.body;
-  
-          // Descripción
-          let description = "";
-          try {
-            const descRes = await axios.get(
-              `https://api.mercadolibre.com/items/${b.id}/description`,
-              { headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-            description = (descRes.data.plain_text || descRes.data.text || "").trim();
-          } catch (err) {
-            description = "";
-          }
-  
-          // Categoría real
-          const categoryName = await getCategoryName(b.category_id, accessToken);
-  
-          const pictures = Array.isArray(b.pictures)
-            ? b.pictures.map(p => p.url).filter(u => u?.startsWith("http"))
-            : [];
-  
-          detailedItems.push({
-            id: b.id,
-            title: b.title,
-            category_id: b.category_id,
-            category: categoryName,        // ← Nombre real de la categoría
-            price: b.price,
-            available_quantity: b.available_quantity,
-            condition: b.condition,
-            pictures,
-            thumbnail: b.thumbnail || "",
-            status: b.status,
-            description
-          });
-        }
-  
-        processed += batch.length;
-        process.stdout.write(
-          `\rDescargando + categoría + descripción: ${processed}/${uniqueItemIds.length} → ${detailedItems.length} válidos`
-        );
-  
-        await new Promise(r => setTimeout(r, 350));
-  
-      } catch (err) {
-        console.log(`\nError en lote:`, err.response?.data?.message || err.message);
-      }
-    }
-  
-    console.log(`\n\nTEST COMPLETADO → ${detailedItems.length} productos con categoría real y descripción`);
+    sendProgress(100, `Completado. ${detailedItems.length} publicaciones guardades en ${elapsedSeconds} segundos`, detailedItems.length);
+
     return detailedItems;
+
+    } catch (err) {
+      sendProgress(0, `Error: ${err.message}`);
+      throw err;
+    }
   }
 
 // Usar para obtener todos los items de la cuenta
 app.get("/api/ml/items-details", async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
   try {
     const items = await fetchAndSaveItems(
       req.accessToken,
       req.userId,
       req.accountId,
+      res
     );
 
-    res.json({
-      success: true,
-      account: req.accountId,
-      total: items.length,
-      message: `Datos actualizados correctamente - Cuenta ${req.accountId}`
-    });
+    res.write(`data: ${JSON.stringify({ complete: true, totaL: items.length })}\n\n`);
   } catch (err) {
-    res.status(500).json({ error: err.message, account: req.accountId });
+    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`)
+  } finally {
+    res.end();
   }
 });
 
