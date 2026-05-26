@@ -151,6 +151,14 @@
     color: var(--blue);
 }
 
+.price-decimals {
+    font-size: 1.2rem;
+    vertical-align: super;
+    position: relative;
+    top: -.3rem;
+    font-weight: bold;
+}
+
 .product-condition {
     font-size: 1.2rem;
     font-weight: bold;

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Actualizador Mercado Libre - 2 Cuentas</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    h1 { text-align: center; color: #333; }
+    .account-card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    button {
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      margin: 10px 0;
+    }
+    .btn1 { background: #00a650; color: white; }
+    .btn2 { background: #0077cc; color: white; }
+    button:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    .progress-container {
+      height: 20px;
+      background: #ddd;
+      border-radius: 10px;
+      margin: 15px 0;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #00a650, #00cc66);
+      width: 0%;
+      transition: width 0.4s ease;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+      line-height: 20px;
+    }
+    .info {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+    .last-update {
+      font-size: 15px;
+      color: #0066cc;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>📦 Actualizador Mercado Libre</h1>
+
+  <!-- Cuenta 1 -->
+  <div class="account-card">
+    <h2>Cuenta David</h2>
+    <button id="btn1" class="btn1">🔄 Actualizar Cuenta David</button>
+    <div class="progress-container">
+      <div id="progress1" class="progress-bar">0%</div>
+    </div>
+    <div class="info">
+      <strong class="last-update" id="last1">Actualizado hace -- días</strong>
+    </div>
+  </div>
+
+  <!-- Cuenta 2 -->
+  <div class="account-card">
+    <h2>Cuenta Ivan</h2>
+    <button id="btn2" class="btn2">🔄 Actualizar Cuenta Ivan</button>
+    <div class="progress-container">
+      <div id="progress2" class="progress-bar">0%</div>
+    </div>
+    <div class="info">
+      <strong class="last-update" id="last2">Actualizado hace -- días</strong>
+    </div>
+  </div>
+
+  <script>
+    let currentEventSource = null;
+
+    function formatTime(seconds) {
+        const min = Math.floor(seconds / 60);
+        const sec = seconds % 60;
+        return `${min}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    async function updateLastUpdate(accountId) {
+        try {
+            const res = await fetch(`http://localhost:5000/api/ml/items?account=${accountId}`);
+            if (res.ok) {
+                const data = await res.json();
+                // Aquí podrías mejorar la fecha si guardas timestamp
+                document.getElementById(`last${accountId}`).textContent = `Actualizado hace poco`;
+            }
+        } catch(e) {}
+    }
+
+    function fetchItems(accountId) {
+        const btn = document.getElementById(`btn${accountId}`);
+        const progressBar = document.getElementById(`progress${accountId}`);
+        const timerEl = document.createElement('div'); // Timer
+        timerEl.id = `timer${accountId}`;
+        timerEl.style.marginTop = "8px";
+        timerEl.style.fontSize = "14px";
+        btn.parentNode.insertBefore(timerEl, btn.nextSibling);
+
+        if (currentEventSource) currentEventSource.close();
+
+        btn.disabled = true;
+        btn.textContent = `Procesando Cuenta ${accountId}...`;
+        progressBar.style.width = "0%";
+        progressBar.textContent = "0%";
+        timerEl.textContent = "Tiempo: 0:00";
+
+        let seconds = 0;
+        const timerInterval = setInterval(() => {
+            seconds++;
+            timerEl.textContent = `Tiempo: ${formatTime(seconds)}`;
+        }, 1000);
+
+        currentEventSource = new EventSource(`http://localhost:5000/api/ml/items-details?account=${accountId}`);
+
+        currentEventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.progress !== undefined) {
+                progressBar.style.width = `${data.progress}%`;
+                progressBar.textContent = `${data.progress}%`;
+            }
+
+            if (data.message) {
+                console.log(data.message);
+            }
+
+            if (data.complete || data.progress === 100) {
+                progressBar.style.width = "100%";
+                progressBar.textContent = "✅ Completado";
+                clearInterval(timerInterval);
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = `🔄 Actualizar Cuenta ${accountId}`;
+                    updateLastUpdate(accountId);
+                    currentEventSource.close();
+                }, 2000);
+            }
+        };
+
+        currentEventSource.onerror = () => {
+            clearInterval(timerInterval);
+            progressBar.style.background = "#ff4444";
+            progressBar.textContent = "Error";
+            btn.disabled = false;
+            btn.textContent = `🔄 Actualizar Cuenta ${accountId}`;
+            currentEventSource.close();
+        };
+    }
+
+    // Botones
+    document.getElementById("btn1").addEventListener("click", () => fetchItems("1"));
+    document.getElementById("btn2").addEventListener("click", () => fetchItems("2"));
+
+    window.onload = () => {
+        updateLastUpdate("1");
+        updateLastUpdate("2");
+    };
+</script>
+</body>
+</html>
