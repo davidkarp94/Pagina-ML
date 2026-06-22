@@ -1,0 +1,266 @@
+.firmware-container {
+    padding: 2rem;
+    max-width: 1000px;
+    margin: 0 auto;
+    text-align: center;
+    box-sizing: border-box;
+  }  
+  
+  .firmware-title {
+    font-size: 2.5rem;
+    margin: 1.5rem 0;
+    color: var(--blue);
+    font-weight: bold;
+  }  
+
+  .firmware-main-image {
+    width: 85%;
+    border-radius: 10px;
+    margin: 2rem 0 3rem 0;
+  }
+  
+  /* Datos */
+  
+  p {
+  font-size: 1.2rem;
+  margin: 1rem 0;
+  }
+  
+  strong {
+  color: var(--blue);
+  }
+
+  .firmware-info-container {
+    margin-top: 1rem;
+    margin-bottom: 3rem;
+  }
+
+  .firmware-info {
+    display: flex;
+    justify-content: baseline;
+    align-items: center;
+    gap: .5rem;
+    font-size: 1.2rem;
+    margin: 0 auto 2rem auto;
+  }
+
+  .firmware-version {
+    text-align: left;
+  }
+
+  .firmware-info svg {
+    font-size: 1.5rem;
+    color: var(--blue);
+  }
+
+  .disclaimer-title {
+    font-size: 1.5rem;
+  }
+  
+  .firmware-price {
+    font-size: 4rem;
+    color: var(--blue);
+    font-weight: bold;
+    margin-top: .5rem;
+  }
+  
+  .firmware-price strong {
+  font-size: 2.5rem;
+  color: var(--blue);
+  }
+
+  .discounted-price-mp {
+    display: inline-flex;
+    gap: .3rem;
+    justify-content: center;
+    align-items: center;
+    background-color: #d6e3f4;
+    padding: 10px 10px;
+    border-radius: 5px;
+    color: #164ca8;
+  }
+  
+  @media screen and (max-width: 800px) {
+  
+  .firmware-container {
+    padding: 1rem;
+  }  
+  
+  .firmware-title {
+    font-size: 1.5rem;
+  }  
+  
+}
+
+/* Compra y consultas */
+
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 2rem 0;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 14px 20px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border-radius: 30px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all .3s;
+  cursor: pointer;
+
+  min-width: 450px;
+  justify-content: space-evenly;
+}
+
+.btn:hover {
+  transform: scale(1.01);
+}
+
+/* Botón Buy */
+
+.buy-btn {
+  background: var(--whatsapp-dark);
+  color: white;
+}
+
+.buy-btn:hover {
+  background: var(--whatsapp);
+}
+
+.buy-icons {
+  display: flex;
+  gap: .2rem;
+  margin-right: .5rem;
+}
+
+.buy-icons svg {
+  font-size: 3rem;
+}
+
+.buy-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.buy-btn strong {
+  color: white;
+  font-size: 1.2rem;
+}
+
+.buy-btn p {
+  font-weight: normal;
+  font-size: 1rem;
+}
+
+/* Botón Guía */
+
+.guide-btn {
+  background: var(--blue);
+  color: white;
+  border: none;
+  cursor: pointer;
+
+  display: flex;
+  gap: .5rem;
+}
+
+.guide-btn:hover {
+  background: var(--light-blue);
+}
+
+.guide-btn svg {
+  font-size: 3rem;
+}
+
+.guide-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-btn strong {
+  color: white;
+  font-size: 1.2rem;
+}
+
+.guide-btn p {
+  font-weight: normal;
+  font-size: 1rem;
+}
+
+/* Botón Consultas */
+
+.consulta-section {
+  text-align: center;
+  margin: 2.5rem 0;
+}
+
+.consulta-divider {
+  position: relative;
+  display: inline-block;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: black;
+  margin-bottom: 2.5rem;
+  padding: 0 20px;
+}
+
+.consulta-divider::before,
+.consulta-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 120px;
+  height: 1px;
+  background: black;
+}
+
+.consulta-divider::before {
+  left: -130px;
+}
+
+.consulta-divider::after {
+  right: -130px;
+}
+
+.help-btn {
+  background: transparent;
+  color: var(--whatsapp-dark);
+  font-size: 1.3rem;
+  border: 5px solid var(--whatsapp-dark);
+}
+
+.help-btn:hover {
+  background: var(--whatsapp-dark);
+  color: white;
+}
+
+.help-btn svg {
+  font-size: 3rem;
+}
+
+@media screen and (max-width: 800px) {
+
+  .firmware-info-container {
+    flex-direction: column;
+    gap: 2rem;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .consulta-divider::before,
+  .consulta-divider::after {
+    width: 60px;
+  }
+  .consulta-divider::before { left: -80px; }
+  .consulta-divider::after { right: -80px; }
+}

@@ -1,0 +1,390 @@
+/* Hero */
+
+.home-hero {
+    background: linear-gradient(135deg, var(--dark-blue) 0%, var(--blue) 100%);
+    color: white;
+    padding: 100px 5% 80px 5%;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-content {
+    max-width: 1300px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+}
+
+.hero-text h1 {
+    font-size: 3.1rem;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+}
+
+.highlight {
+    color: var(--yellow);
+    font-weight: bold;
+}
+
+.title-underline {
+    width: 180px;
+    height: 5px;
+    background: var(--yellow);
+    margin: 20px 0 35px 0;
+    border-radius: 0 50% 50% 0;
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    opacity: .95;
+    font-weight: 300;
+}
+
+.hero-description {
+    font-size: 1.25rem;
+    margin-bottom: 2rem;
+    opacity: .9;
+    font-weight: 200;
+}
+
+.hero-features {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 3rem;
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.feature svg {
+    font-size: 3rem;
+}
+
+.feature p {
+    font-size: 1rem;
+    font-weight: 300;
+}
+
+/* Imagen */
+
+.hero-image img {
+    width: 100%;
+    max-width: 620px;
+}
+
+/* Cards */
+
+.services-section {
+    padding: 5rem 5% 6rem 5%;
+}
+
+.services-container {
+    max-width: 1300px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    justify-items: center;
+    justify-content: center;
+}
+
+.service-card {
+    background: white;
+    padding: 2.5rem 2rem;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .08);
+    text-align: center;
+    transition: all .3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 410px;
+
+    max-width: 350px;
+}
+
+.service-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, .12);
+}
+
+.service-card svg {
+    font-size: 5rem;
+    color: white;
+    background: var(--blue);
+    border-radius: 50%;
+    margin: 0 auto 1rem auto;
+    padding: 1rem;
+}
+
+.service-card h3 {
+    color: var(--blue);
+    font-size: 1.6rem;
+    min-height: 52px;
+}
+
+.service-card p {
+    color: #555;
+    line-height: 1.4;
+    margin-bottom: 1rem;
+    flex-grow: 1;
+}
+
+.service-btn {
+    display: inline-block;
+    padding: 12px 28px;
+    background: var(--blue);
+    color: white;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+    margin-top: auto;
+    transition: all .3s;
+}
+
+.service-btn:hover {
+    background: var(--light-blue);
+    transform: translateY(-1px);
+}
+
+/* Trust Bar */
+
+.trust-bar {
+    background: #f8f9fa;
+    padding: 3rem 5%;
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+}
+
+.trust-container {
+    max-width: 1300px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2.5rem;
+    text-align: center;
+}
+
+.trust-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.trust-item svg {
+    color: var(--blue);
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.trust-item h4 {
+    color: var(--blue);
+    font-size: 1.25rem;
+    margin-bottom: .6rem;
+}
+
+.trust-item p {
+    color: #666;
+    font-size: 1rem;
+    line-height: 1.5;
+    max-width: 220px;
+}
+
+/* About Us */
+
+.about-section {
+    padding: 5rem 5% 6rem 5%;
+}
+
+.about-container {
+    max-width: 1300px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+}
+
+.about-image {
+    align-self: end;
+}
+
+.about-image img {
+    width: 100%;
+    border-radius: 12px;
+}
+
+.about-content h2 {
+    color: var(--blue);
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    margin-bottom: .5rem;
+}
+
+.about-underline {
+    width: 80px;
+    height: 4px;
+    background: var(--yellow);
+    margin-bottom: 1.5rem;
+}
+
+.about-content h3 {
+    font-size: 2.1rem;
+    color: #222;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+.about-content p {
+    color: #555;
+    font-size: 1.15rem;
+    line-height: 1.7;
+    margin-bottom: 2rem;
+}
+
+.attention-box {
+    display: flex;
+    gap: 1rem;
+    border-radius: 12px;
+    align-items: center;
+}
+
+.attention-box svg {
+    font-size: 4rem;
+    color: var(--blue);
+}
+
+.attention-box strong {
+    color: var(--blue);
+    display: block;
+    margin-bottom: .4rem;
+}
+
+.attention-box p {
+    margin: 0;
+}
+
+/* Consultas */
+
+.home-guide-help {
+    justify-self: center;
+    background: var(--yellow) !important;
+    border: none !important;
+}
+
+.home-help-content {
+    gap: 4rem !important;
+}
+
+/* Responsive */
+
+@media (max-width: 992px) {
+    .hero-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .hero-text h1 {
+        font-size: 2.6rem;
+    }
+
+    .title-underline {
+        justify-self: center;
+        border-radius: 50%;
+    }
+
+    .hero-features {
+        justify-content: center;
+        margin-bottom: 0;
+    }
+
+    .about-container {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .about-image {
+        order: -1;
+    }
+    
+    .about-underline {
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .attention-box {
+        justify-self: center;
+    }
+}
+
+@media (max-width: 768px) {
+
+    .home-hero {
+        padding: 60px 5% 50px 5%;
+    }
+
+    .hero-text h1 {
+        font-size: 2.35rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.25rem;
+    }
+
+    .hero-features {
+        justify-content: center;
+        gap: 1.5rem;
+    }
+
+    .services-section {
+      padding: 3rem 5% 4rem 5%;
+    }
+
+    .trust-container {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
+    }
+
+    .about-section {
+        padding: 3.5rem 5%;
+    }
+    
+    .home-help-content {
+        gap: 1rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .hero-text h1 {
+        font-size: 2rem;
+        line-height: 1.15;
+    }
+
+    .hero-subtitle,
+    .hero-description {
+        font-size: 1.15rem;
+    }
+
+    .feature {
+        font-size: 0.95rem;
+    }
+
+    .hero-features {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .trust-container {
+        grid-template-columns: 1fr;
+    }
+}

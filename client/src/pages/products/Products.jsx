@@ -9,13 +9,13 @@ const Products = () => {
   const [ isLoading, setIsLoading ] = useState(true);
   const [ error, setError ] = useState(null);
   const [ search, setSearch ] = useState("");
+  const [ sortBy, setSortBy ] = useState("title");
   const [ sortOrder, setSortOrder ] = useState("asc");
   const [ brand, setBrand ] = useState("");
   const [ currentPage, setCurrentPage ] = useState(1);
   const [ isPriceOpen, setIsPriceOpen ] = useState(false);
   const [ isBrandOpen, setIsBrandOpen ] = useState(false);
 
-  const navigate = useNavigate();
   const priceRef = useRef(null);
   const brandRef = useRef(null);
 
@@ -96,9 +96,6 @@ const Products = () => {
     };
   }, []);
 
-  const productsPerPage = 20;
-  const maxVisiblePages = 8;
-
   const brands = [
     "", "Admiral", "Aoc", "Ashima", "Bgh", "Daewoo", "Goldstar", "Hisense", "Hitachi", "Hyundai", "Ilo", "Jvc", "Kanji", "Ken Brown", "Master-g", "Motorola", "Nex", "Noblex", "Panoramic", "Philco", "Philips", "Pioneer", "Quantic", "Rca", "Samsung", "Sansei", "Sanyo", "Sharp", "Skyworth", "Talent", "Tcl", "Tedge", "Telefunken", "Ths", "Tonomac", "Top House", "Toshiba"
   ]
@@ -108,21 +105,35 @@ const Products = () => {
     .filter((product) => {
       const title = product.title.toLowerCase();
       const searchTerms = search.toLowerCase().trim().split(/\s+/);
-      const allTerms = [...searchTerms, brand.toLowerCase()].filter(term => term)
-      return allTerms.every(term => {
-        if (term.includes(" ")) {
-          const concatenatedTerm = term.replace(/\s+/g, "");
-          return title.includes(term) || title.includes(concatenatedTerm);
-        }
-        return title.includes(term);
-      });
+      const allTerms = [...searchTerms, brand.toLowerCase()].filter(term => term);
+      return allTerms.every(term => title.includes(term.replace(/\s+/g, "")) || title.includes(term));
     })
-    .sort((a, b) => (sortOrder === "asc" ? a.price - b.price : b.price - a.price));
+    .sort((a, b) => {
+      if (sortBy === "price") {
+        return sortOrder === "asc" ? a.price - b.price : b.price - a.price;
+      } else {
+        return sortOrder === "asc"
+          ? a.title.localeCompare(b.title)
+          : b.title.localeCompare(a.title);
+      }
+    });
 
+    const productsPerPage = 20;
+    const maxVisiblePages = window.innerWidth < 600 ? 3 : (window.innerWidth < 800 ? 4 : 8);
     const totalPages = Math.ceil(filteredData.length / productsPerPage);
     const indexOfLastProduct = currentPage * productsPerPage;
     const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
     const currentProducts = filteredData.slice(indexOfFirstProduct, indexOfLastProduct);
+
+    const toggleSortOrder = () => {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      setCurrentPage(1);
+    }
+
+    const handleSortByChange = (e) => {
+      setSortBy(e.target.value);
+      setCurrentPage(1);
+    }
 
     const getPageNumbers = () => {
       const pageNumbers = [];
@@ -191,48 +202,42 @@ const Products = () => {
             setCurrentPage(1);
           }}
           />
-          <div className="filters-selects">
 
-          <div className={`select-container ${isBrandOpen ? "brand-open" : ""}`} ref={brandRef}>
-            <select
-            value={brand}
-            onClick={() => setIsBrandOpen((prev) => !prev)}
-            onBlur={() => setTimeout(() => setIsBrandOpen(false), 200)}
-            onChange={(e) => {
-              setBrand(e.target.value);
-              setCurrentPage(1);
-              setTimeout(() => setIsBrandOpen(false), 100);
-            }}
-          >
-            <option value="">Todas las Marcas</option>
-            {brands.slice(1).map((brandOption) => (
-              <option key={brandOption} value={brandOption}>
-                {brandOption.charAt(0).toUpperCase() + brandOption.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
-        
-            <div className={`select-container ${isPriceOpen ? "price-open" : ""}`} ref={priceRef}>
+          <div className="filters-selects">
+            <div className="sort-container">
               <select
-              value={sortOrder}
-              onClick={() => setIsPriceOpen((prev) => !prev)}
-              onBlur={() => setTimeout(() => setIsPriceOpen(false), 200)}
+              value={`${sortBy}-${sortOrder}`}
               onChange={(e) => {
-                setSortOrder(e.target.value);
+                const [newSortBy, newSortOrder] = e.target.value.split('-');
+                setSortBy(newSortBy);
+                setSortOrder(newSortOrder);
                 setCurrentPage(1);
-                setTimeout(() => setIsPriceOpen(false), 100);
-              }}>
-                <option value="asc">Precio: Menor a Mayor</option>
-                <option value="desc">Precio: Mayor a Menor</option>
+              }}
+              className="sort-select"
+              >
+                <option value="price-asc">Ordenar por Precio 🠉</option>
+                <option value="price-desc">Ordenar por Precio 🠋</option>
+                <option value="title-asc">Ordenar Alfabéticamente 🠉</option>
+                <option value="title-desc">Ordenar Alfabéticamente 🠋</option>
               </select>
             </div>
 
+            <div classname={`select-container ${isBrandOpen ? "brand-open" : ""}`} ref={brandRef}>
+              <select value={brand} onChange={(e) => { setBrand(e.target.value); setCurrentPage(1); }}>
+                <option value="">Todas las Marcas</option>
+                {brands.slice(1).map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
         </div>
+
         <div className="results-count">
           Mostrando {filteredData.length.toLocaleString()} resultados.
         </div>
+        
         <div className="product-list">
           {currentProducts.map((product) => (
             <div
@@ -246,9 +251,9 @@ const Products = () => {
                 alt={`Imagen de ${product.title}`}
                 className="product-image"
                 />
-                <p className="product-price">
+                <p className="discounted-price">
                   ${formatPrice(product.price * 0.9).integer}
-                  <span className='price-decimals'>{formatPrice(product.price * 0.9).decimal}</span>
+                  <span className='decimals'>{formatPrice(product.price * 0.9).decimal}</span>
                 </p>
                 <RouteButton text="Ver Producto" route={`/products/${product.id}`} />
               </div>
@@ -261,7 +266,7 @@ const Products = () => {
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
           >
-            Anterior
+            {window.innerWidth < 800 ? "Ant" : "Anterior"}
           </button>
           {showLeftEllipsis && (
             <>
@@ -299,12 +304,12 @@ const Products = () => {
           onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
           disabled={currentPage === totalPages}
           >
-            Siguiente
+            {window.innerWidth < 800 ? "Sig" : "Siguiente"}
           </button>
         </div>
       </div>
-
     </div>
+
   );
 };
 

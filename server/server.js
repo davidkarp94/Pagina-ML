@@ -456,6 +456,10 @@ app.get("/api/ml/item-body/:id", async (req, res) => {
   try {
     console.log(`Consultando item completo: ${itemId}`);
 
+    const accountId = req.query.account || "1";
+    req.accountId = accountId;
+    req.accessToken = await ensureValidToken(accountId);
+
     const response = await axios.get(`https://api.mercadolibre.com/items/${itemId}`, {
       headers: { Authorization: `Bearer ${req.accessToken}` },
     });
@@ -463,7 +467,9 @@ app.get("/api/ml/item-body/:id", async (req, res) => {
     res.json({
       success: true,
       item_id: itemId,
-      body: response.data
+      body: response.data,
+      sub_status: response.data.sub_status,
+      full_status: response.data.status  
     });
 
   } catch (err) {

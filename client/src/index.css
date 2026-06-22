@@ -11,10 +11,15 @@
 }
 
 :root {
-  --yellow: #ffe600;
+  --yellow: #d0bb00;
   --blue:  #2d3277;
+  --gray-blue: #555995;
   --light-blue: #3483fa;
   --red: rgb(149, 0, 0);
+  --whatsapp: #20ba5c;
+  --whatsapp-dark: #179447;
+  --black: rgb(21, 21, 21);
+  --dark-blue: #08172e;
 }
 
 html {

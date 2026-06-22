@@ -4,8 +4,10 @@ import Navbar from "./components/navbar/Navbar";
 import Home from "./pages/home/Home";
 import Products from "./pages/products/Products";
 import Product from "./components/product/Product";
-import About from "./pages/about/About";
-import Contact from "./pages/contact/Contact";
+import Firmwares from "./pages/firmwares/Firmwares";
+import Firmware from "./components/firmware/Firmware";
+import Guide from "./pages/guide/Guide";
+import Footer from "./components/footer/Footer";
 
 function App() {
 
@@ -16,9 +18,11 @@ function App() {
         <Route path="/" element={ <Home /> } />
         <Route path="/products" element={ <Products /> } />
         <Route path="/products/:id" element={ <Product /> } />
-        <Route path="/about" element={ <About /> } />
-        <Route path="/contact" element={ <Contact /> } />
+        <Route path="/firmwares" element={ <Firmwares /> } />
+        <Route path="/firmwares/:id" element={ <Firmware /> } />
+        <Route path="/guide" element={ <Guide /> } />
       </Routes>
+      <Footer />
     </Router>
   )
 }

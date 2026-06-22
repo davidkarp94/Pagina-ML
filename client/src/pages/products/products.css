@@ -8,6 +8,11 @@
     box-sizing: border-box;
 }
 
+.loading,
+.error {
+    font-size: 1.4rem;
+}
+
 .products-box {
     width: 90%;
     max-width: 80rem;
@@ -33,6 +38,42 @@
 .filters-selects {
     display: flex;
     gap: 1rem;
+}
+
+.sort-container {
+    min-width: 2rem;
+}
+
+.sort-select {
+    padding: 1rem 3.5rem 1rem 1rem;
+    font-size: 1.5rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    position: relative;
+}
+
+.sort-select::ms-expand {
+    display: none;
+}
+
+.sort-container::after {
+    content: "";
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 1.8rem;
+    color: #333;
+}
+
+.option-prompt {
+    margin-right: 1rem;
 }
 
 .filters input,
@@ -120,6 +161,8 @@
     grid-template-columns: 40% 60%;
     align-items: center;
     height: 100%;
+
+    cursor: default;
 }
 
 .card-section {
@@ -145,13 +188,13 @@
     border-radius: 50%;
 }
 
-.product-price {
+.discounted-price {
     font-weight: bold;
     font-size: 2rem;
     color: var(--blue);
 }
 
-.price-decimals {
+.decimals {
     font-size: 1.2rem;
     vertical-align: super;
     position: relative;
@@ -181,7 +224,7 @@
     font-size: 1.5rem;
     cursor: pointer;
     border: none;
-    background: black;
+    background: var(--blue);
     min-width: 2.5rem;
     text-align: center;
     color: white;
@@ -194,13 +237,13 @@
 
 .pagination-button.active {
     background: var(--blue);
-    color: white;
+    color: var(--light-blue);
 }
 
 .pagination-ellipsis {
     font-size: 1.5rem;
     padding: .5rem;
-    color: #666;
+    color: var(--gray-blue);
 }
 
 .pagination span {

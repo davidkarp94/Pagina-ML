@@ -1,0 +1,299 @@
+.footer {
+    background: var(--blue);
+    color: #ddd;
+}
+
+.footer-container {
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 0 20px;
+
+    display: grid;
+    grid-template-columns: 2fr 1fr 2fr 2fr;
+    gap: 3rem;
+}
+
+/* Main Footer */
+
+.footer-main {
+    padding: 4rem 0 2rem 0;
+}
+
+.footer-col h4 {
+    color: var(--yellow);
+    margin-bottom: 1.2rem;
+    font-size: 1.1rem;
+}
+
+.footer-col a,
+.footer-col p {
+    color: white;
+    text-decoration: none;
+    line-height: 1.8;
+    transition: color .3s;
+}
+
+.footer-col a:hover {
+    color: var(--yellow);
+}
+
+/* Columna Logo */
+
+.logo-col .footer-logo {
+    height: 80px;
+    margin-bottom: 1rem;
+}
+
+.footer-description {
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.footer-badges-text {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.footer-badges-text svg {
+    color: var(--yellow);
+    font-size: 1.5rem;
+}
+
+/* Columnas */
+
+.nav-col p {
+    transition: all .3s ease-in-out;
+}
+
+.nav-col p:hover {
+    color: var(--yellow);
+}
+
+.info-col {
+    display: flex;
+    gap: 1rem;
+}
+
+.info-col svg {
+    color: var(--yellow);
+    font-size: 2rem;
+}
+
+.info-col strong {
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.info-col p {
+    font-size: .9rem;
+    color: #bbb;
+    margin: 0 0 2rem 0;
+}
+
+.contact-col-texto {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+
+    margin-bottom: 1.5rem;
+}
+
+.contact-col-texto svg {
+    color: var(--yellow);
+    font-size: 1.5rem;
+}
+
+.contact-col-texto a {
+    text-decoration: none;
+    transition: all .3s ease-in-out;
+}
+
+.contact-col-texto p {
+    margin: 0;
+}
+
+.contact-col-texto a p:hover {
+    color: var(--yellow);
+}
+
+/* Barra Abajo */
+
+.footer-bottom {
+    background: var(--dark-blue);
+    padding: 1.2rem 0;
+    border-top: 1px solid #1e3a5f;
+    font-size: .95rem;
+}
+
+.footer-bottom .footer-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.footer-bottom p {
+    margin: 0;
+    text-align: center;
+    flex: 1;
+}
+
+.footer-secure {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.footer-secure svg,
+.footer-secure p,
+.footer-secure strong {
+    color: #bbb;
+}
+
+.footer-secure svg {
+    font-size: 2rem;
+}
+
+.footer-secure strong {
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.footer-secure p {
+    font-weight: normal;
+    font-size: 1rem;
+}
+
+
+
+/* Yellow Bar */
+
+.footer-yellow {
+    background: var(--yellow);
+    color: var(--blue);
+    padding: 1.2rem 0;
+    font-weight: 500;
+}
+
+.yellow-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.help-text-container {
+    display: flex;
+    gap: 1rem;
+}
+
+.help-text-container svg {
+    font-size: 3rem;
+    color: var(--black);
+}
+
+.help-text strong {
+    font-weight: bold;
+    color: var(--black);
+    font-size: 1rem;
+}
+
+.help-text p {
+    font-weight: normal;
+    margin-top: .5rem;
+    color: var(--black);
+    font-size: 1rem;
+}
+
+.yellow-whatsapp-btn {
+    background: transparent;
+    border: 3px solid var(--black);
+    color: var(--black);
+    padding: 15px 30px;
+    border-radius: 20px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+
+    transition: all .3s ease-in-out;
+}
+
+.yellow-whatsapp-btn svg {
+    font-size: 2rem;
+}
+
+.yellow-whatsapp-btn:hover {
+    background: var(--whatsapp);
+    color: white;
+    border-color: var(--whatsapp);
+}
+
+/* Responsive */
+
+@media (max-width: 1300px) {
+    .footer-container {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .nav-col {
+        margin-top: 7.5rem;
+    }
+}
+
+@media (max-width: 950px) {
+    .yellow-content {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 800px) {
+
+    .footer-bottom {
+        padding: 2rem 0;
+    }
+
+    .footer-bottom .footer-container {
+        flex-direction: column;
+        text-align: center;
+        gap: .8rem;
+    }
+
+    .footer-secure {
+        justify-content: center;
+        margin-top: 1rem;
+    }
+
+    .footer-container {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .footer-badges-text {
+        justify-content: center;
+    }
+
+    .info-col-container {
+        justify-self: center;
+    }
+
+    .info-col-texto {
+        text-align: left;
+    }
+
+    .contact-col-texto {
+        justify-content: center;
+    }
+
+    .nav-col,
+    .info-col-container,
+    .contact-col {
+        margin-top: 3rem;
+    }
+}

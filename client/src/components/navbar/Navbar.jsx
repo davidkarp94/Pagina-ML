@@ -1,40 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import "./navbar.css";
-import { FaShoppingCart } from "react-icons/fa";
-import { useCart } from '../../context/CartContext';
-import CartSidebar from '../cartsidebar/CartSidebar';
+import logo from "../../../data/logonk.png";
+import { FiMenu, FiX } from 'react-icons/fi';
 
 const Navbar = () => {
 
-  const { toggleCart, cartItems } = useCart();
+  const [ isOpen, setIsOpen ] = useState(false);
+  const toggleMenu = () => setIsOpen(!isOpen);
 
   return (
     <>
-      <div className='navbar-container'>
-        <div className="logo">
-          <Link to="/">
-            NK Repuestos
-          </Link>
-        </div> 
+      <nav className='navbar-container'>
 
-        <div className="navbar-links-container">
-          <Link to="/">Inicio</Link>
+          <div className="logo">
+            <Link to="/">
+              <img src={logo} alt="NK Repuestos Marcos Paz" className='navbar-logo' />
+            </Link>
+          </div>
 
-          <Link to="/products">Productos</Link>
+          {/* Hamburguer */}
+          <button className='hamburger' onClick={toggleMenu}>
+            {isOpen ? <FiX size={32} /> : <FiMenu size={32} />}
+          </button>
 
-          <Link to="/about">Quienes Somos</Link>
+          <div className={`navbar-links-container ${isOpen ? 'active' : ''}`}>
+            <Link to="/" onClick={() => setIsOpen(false)}>Inicio</Link>
 
-          <Link to="/contact">Contacto</Link>
-        </div>
+            <Link to="/products" onClick={() => setIsOpen(false)}>Repuestos</Link>
 
-        <div className="cart-container" onClick={toggleCart}>
-          <FaShoppingCart />
-          {cartItems.length > 0 && <span className='cart-count'>{cartItems.length}</span>}
-        </div>
-      </div>
+            <Link to="/firmwares" onClick={() => setIsOpen(false)}>Firmwares</Link>
 
-      <CartSidebar />
+            <Link to="/guide" onClick={() => setIsOpen(false)}>Guía de Compra</Link>
+          </div>
+
+      </nav>
     </>
   )
 }

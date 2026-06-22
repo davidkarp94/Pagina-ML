@@ -1,0 +1,287 @@
+.products-container {
+    padding: 4rem 0rem;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+.products-box {
+    width: 90%;
+    max-width: 80rem;
+}
+
+/* filters */
+
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 120rem;
+}
+
+.filters input {
+    flex: 1;
+    min-width: 20rem;
+    border: 1px solid #ccc;
+}
+
+.filters-selects {
+    display: flex;
+    gap: 1rem;
+}
+
+.sort-container {
+    min-width: 2rem;
+}
+
+.sort-select {
+    padding: 1rem 3.5rem 1rem 1rem;
+    font-size: 1.5rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    position: relative;
+}
+
+.sort-select::ms-expand {
+    display: none;
+}
+
+.sort-container::after {
+    content: "";
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    font-size: 1.8rem;
+    color: #333;
+}
+
+.option-prompt {
+    margin-right: 1rem;
+}
+
+.filters input,
+.filters select {
+    padding: 1rem;
+    font-size: 1.5rem;
+    box-sizing: border-box;
+}
+
+.filters select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 1rem 4rem 1rem 1rem;
+    cursor: pointer;
+    position: relative;
+    width: 100%;
+}
+
+.select-container {
+    position: relative;
+    min-width: 20rem;
+}
+
+.select-container select {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.5rem;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    appearance: none;
+    padding-right: 2.5rem;
+}
+
+.select-container::after {
+    content: "▼";
+    font-size: 1.5rem;
+    color: #666;
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.select-container.price-open select,
+.select-container.brand-open select {
+    border-color: var(--blue);
+}
+
+.select-container.price-open::after,
+.select-container.brand-open::after {
+    content: "▲";
+}
+
+.results-count {
+    font-size: 1.2rem;
+    color: #666;
+    margin-bottom: 1.5rem;
+    margin-left: .5rem;
+    text-align: left;
+    width: 100%;
+}
+
+/* list */
+
+.firmware-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 120rem;
+}
+
+.firmware-card {
+    border: 1px solid rgb(171, 171, 171);
+    padding: 1.5rem;
+    text-align: center;
+    background-color: rgb(240, 240, 240);
+
+    transition: all .3s ease-in-out;
+
+    display: grid;
+    grid-template-columns: 40% 60%;
+    align-items: center;
+    height: 100%;
+
+    cursor: default;
+}
+
+.card-section {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+}
+
+.firmware-card:hover {
+    background-color: rgb(220, 220, 220);
+}
+
+.firmware-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+}
+
+.firmware-image {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.firmwares-price {
+    font-weight: bold;
+    font-size: 2rem;
+    color: var(--blue);
+}
+
+.price-decimals {
+    font-size: 1.2rem;
+    vertical-align: super;
+    position: relative;
+    top: -.3rem;
+    font-weight: bold;
+}
+
+/* pagination */
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: .5rem;
+    margin-top: 2rem;
+    width: 100%;
+    max-width: 120rem;
+}
+
+.pagination-button {
+    padding: .5rem 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    border: none;
+    background: var(--blue);
+    min-width: 2.5rem;
+    text-align: center;
+    color: white;
+}
+
+.pagination-button:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+}
+
+.pagination-button.active {
+    background: var(--light-blue);
+    color: white;
+}
+
+.pagination-ellipsis {
+    font-size: 1.5rem;
+    padding: .5rem;
+    color: var(--gray-blue);
+}
+
+.pagination span {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+@media screen and (max-width: 1280px) {
+
+    .filters {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .filters-selects {
+        width: 100%;
+    }
+
+    .select-container {
+        width: 100%;
+    }
+
+}
+
+@media screen and (max-width: 800px) {
+    .filters-selects {
+        flex-direction: column;
+    }
+
+    .firmware-card {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .firmware-name {
+        font-size: 1.5rem;
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+        padding: 0 5%;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .firmware-image {
+        display: none;
+    }
+}
