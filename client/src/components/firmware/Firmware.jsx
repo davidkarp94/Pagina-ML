@@ -47,7 +47,7 @@ const Firmware = () => {
     fetchFirmware();
   }, [id]);
 
-  const whatsappNumber = "5491150943302";
+  const whatsappNumber = "5491131727778";
 
   const getWhatsappHelp = () => {
     if (!firmware) return "#";

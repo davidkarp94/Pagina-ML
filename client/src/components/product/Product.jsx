@@ -106,7 +106,7 @@ const Product = () => {
       thumbnailAlt: `Miniatura de ${product.title}`
     }];
 
-    const whatsappNumber = "5491150943302";
+    const whatsappNumber = "5491131727778";
 
     const messageHelp = encodeURIComponent(
       `Hola, tengo una consulta acerca del producto: "${product.title}"\n\n`

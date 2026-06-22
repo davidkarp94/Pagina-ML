@@ -115,7 +115,7 @@ const Guide = () => {
               <p>Envianos una foto del modelo o del código de la placa por Whatsapp y te ayudaremos a identificar el producto correcto antes de comprar.</p>
             </div>
           </div>
-          <a href="https://wa.me/5491150943302" target="_blank" rel="noopener noreferrer" className="guide-whatsapp-btn">
+          <a href="https://wa.me/5491131727778" target="_blank" rel="noopener noreferrer" className="guide-whatsapp-btn">
             <FaWhatsapp /> Consultanos por WhatsApp
           </a>
         </div>

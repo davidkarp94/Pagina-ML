@@ -81,7 +81,7 @@ const Footer = () => {
             <h4>CONTACTO</h4>
             <div className="contact-col-texto">
               <FaWhatsapp />
-              <a href="https://wa.me/5491150943302" target="_blank" rel="noopener noreferrer">
+              <a href="https://wa.me/5491131727778" target="_blank" rel="noopener noreferrer">
                 <p>Consultanos por WhatsApp</p>
               </a>
             </div>
@@ -124,7 +124,7 @@ const Footer = () => {
               <p>Nuestro equipo está para asesorarte.</p>
             </div>
           </div>
-          <a href="https://wa.me/5491150943302" target="_blank" rel="noopener noreferrer" className="yellow-whatsapp-btn">
+          <a href="https://wa.me/5491131727778" target="_blank" rel="noopener noreferrer" className="yellow-whatsapp-btn">
             <FaWhatsapp /> Consultanos por WhatsApp
           </a>
         </div>

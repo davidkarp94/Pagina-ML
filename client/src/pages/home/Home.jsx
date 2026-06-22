@@ -132,7 +132,7 @@ const Home = () => {
               <div className="about-underline"></div>
             </div>
 
-            <h3>Somos una empresa familiar de Marcos Paz</h3>
+            <h3>Somos una empresa de Marcos Paz</h3>
 
             <p>
               Nos especializamos en Repuestos y Firmwares para Televisores LED, LCD y Smart TV, además de otros electrodomésticos como Heladeras, Lavarropas, etc.<br />
@@ -159,7 +159,7 @@ const Home = () => {
               <p>Escribinos por WhatsApp y nuestro equipo te asesorará sin compromiso.</p>
             </div>
           </div>
-          <a href="https://wa.me/5491150943302" target="_blank" rel="noopener noreferrer" className="guide-whatsapp-btn">
+          <a href="https://wa.me/5491131727778" target="_blank" rel="noopener noreferrer" className="guide-whatsapp-btn">
             <FaWhatsapp /> Consultanos por WhatsApp
           </a>
         </div>
